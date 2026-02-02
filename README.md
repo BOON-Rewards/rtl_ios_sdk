@@ -146,5 +146,3 @@ See the `Example/RTLSdkExample` directory for a complete example implementation.
 Copyright (c) 2024 Affina Loyalty. All rights reserved.
 
 This SDK is provided under a proprietary license. Use of this SDK requires a valid business agreement with Affina Loyalty. Unauthorized copying, modification, distribution, or use of this software is strictly prohibited.
-
-For licensing inquiries, contact: [your-contact-email]
