@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import WebKit
 
 /// Main SDK singleton for RTL webview integration
@@ -25,6 +26,21 @@ public final class RTLSdk {
     private var loginTimeoutTask: Task<Void, Never>?
     private let loginTimeout: TimeInterval = 30.0
 
+    // MARK: - Token Management
+
+    private let tokenTimestampKey = "RTLSdk.lastTokenTimestamp"
+    private let tokenExpiryInterval: TimeInterval = 20 * 60 * 60 // 20 hours
+
+    private var lastTokenTimestamp: Date? {
+        get { UserDefaults.standard.object(forKey: tokenTimestampKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: tokenTimestampKey) }
+    }
+
+    private var isTokenExpired: Bool {
+        guard let lastTime = lastTokenTimestamp else { return true }
+        return Date().timeIntervalSince(lastTime) >= tokenExpiryInterval
+    }
+
     // MARK: - Delegate
 
     /// Delegate for receiving SDK events
@@ -45,6 +61,7 @@ public final class RTLSdk {
         self.urlScheme = urlScheme
         self.isInitialized = true
         self._isLoggedIn = false
+        setupForegroundObserver()
     }
 
     // MARK: - Public API
@@ -65,6 +82,17 @@ public final class RTLSdk {
         let webView = RTLWebView(sdk: self)
         self.webView = webView
         return webView
+    }
+
+    /// Request token from delegate and perform login
+    /// Called on initial webview show and when token expires
+    @MainActor
+    public func requestTokenAndLogin() async -> Bool {
+        guard let token = await delegate?.rtlSdkNeedsToken() else {
+            print("[RTLSdk] Token requested but delegate returned nil")
+            return false
+        }
+        return await login(token: token)
     }
 
     /// Async login that completes when userAuth message is received or times out
@@ -124,6 +152,7 @@ public final class RTLSdk {
     /// Called internally when userAuth message is received from webview
     internal func handleUserAuthReceived(accessToken: String, refreshToken: String) {
         _isLoggedIn = true
+        lastTokenTimestamp = Date()
         delegate?.rtlSdkDidAuthenticate(accessToken: accessToken, refreshToken: refreshToken)
         completeLogin(success: true)
     }
@@ -191,4 +220,35 @@ public final class RTLSdk {
 
     internal var currentProgram: String? { program }
     internal var currentEnvironment: RTLEnvironment? { environment }
+
+    // MARK: - App Lifecycle
+
+    private func setupForegroundObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+
+    @objc private func appWillEnterForeground() {
+        Task { @MainActor in
+            await checkAndRefreshTokenIfNeeded()
+        }
+    }
+
+    @MainActor
+    private func checkAndRefreshTokenIfNeeded() async {
+        guard isTokenExpired else {
+            print("[RTLSdk] Token still valid, no refresh needed")
+            return
+        }
+        guard webView != nil else {
+            print("[RTLSdk] WebView not created, skipping token refresh")
+            return
+        }
+        print("[RTLSdk] Token expired, requesting fresh token...")
+        _ = await requestTokenAndLogin()
+    }
 }

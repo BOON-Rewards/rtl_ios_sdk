@@ -1,0 +1,3 @@
+module RTLSdk {
+    header "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/include/RTLSdk-Swift.h"
+}

@@ -1,0 +1,336 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+    "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk_RTLSdk.bundle/LICENSE.md" : {
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/LICENSE.md"
+        }
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk_RTLSdk.bundle/LICENSE.md"
+        }
+      ]
+    }
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.RTLSdk-arm64-apple-macosx15.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/sources",
+      "importPath" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLEnvironment.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLMessageHandler.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLSdk.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLSdkDelegate.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLTokenType.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLWebView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/DerivedSources/resource_bundle_accessor.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<RTLSdk-arm64-apple-macosx15.0-debug.module-resources>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "RTLSdk",
+      "moduleOutputPath" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/Modules/RTLSdk.swiftmodule",
+      "objects" : [
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLEnvironment.swift.o",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLMessageHandler.swift.o",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLSdk.swift.o",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLSdkDelegate.swift.o",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLTokenType.swift.o",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLWebView.swift.o",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/resource_bundle_accessor.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx10.13",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j16",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_AVAILABLE",
+        "-module-cache-path",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/include/RTLSdk-Swift.h",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g"
+      ],
+      "outputFileMapPath" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLEnvironment.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLMessageHandler.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLSdk.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLSdkDelegate.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLTokenType.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/RTLWebView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/resource_bundle_accessor.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/Modules/RTLSdk.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLEnvironment.swift",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLMessageHandler.swift",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLSdk.swift",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLSdkDelegate.swift",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLTokenType.swift",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLWebView.swift",
+        "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/DerivedSources/resource_bundle_accessor.swift"
+      ],
+      "tempsPath" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "RTLSdk" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "RTLSdk",
+      "-c",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLEnvironment.swift",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLMessageHandler.swift",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLSdk.swift",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLSdkDelegate.swift",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLTokenType.swift",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLWebView.swift",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/DerivedSources/resource_bundle_accessor.swift",
+      "-I",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx10.13",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j16",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_AVAILABLE",
+      "-module-cache-path",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/include/RTLSdk-Swift.h",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "RTLSdk" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLEnvironment.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLMessageHandler.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLSdk.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLSdkDelegate.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLTokenType.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/Sources/RTLSdk/RTLWebView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/DerivedSources/resource_bundle_accessor.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/RTLSdk.build/sources"
+    },
+    "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/levonnalbandyan/projects/rtl_ios_sdk/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}
