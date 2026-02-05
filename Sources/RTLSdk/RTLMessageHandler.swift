@@ -39,6 +39,8 @@ final class RTLMessageHandler: NSObject, WKScriptMessageHandler {
             return
         }
 
+        print("[RTLSdk] 📩 Raw message received: \(body)")
+
         guard let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             print("[RTLSdk] Failed to parse message JSON: \(body)")
@@ -52,6 +54,7 @@ final class RTLMessageHandler: NSObject, WKScriptMessageHandler {
         }
 
         print("[RTLSdk] Received message: \(messageType.rawValue)")
+        print("[RTLSdk] 📦 Message payload: \(json)")
 
         switch messageType {
         case .openExternalUrl:
@@ -98,7 +101,8 @@ final class RTLMessageHandler: NSObject, WKScriptMessageHandler {
     }
 
     private func handleUserAuth(_ json: [String: Any]) {
-        guard let accessToken = json["accessToken"] as? String,
+        // Accept both "token" and "accessToken" keys
+        guard let accessToken = (json["accessToken"] as? String) ?? (json["token"] as? String),
               let refreshToken = json["refreshToken"] as? String else {
             print("[RTLSdk] Missing tokens in userAuth message")
             return
