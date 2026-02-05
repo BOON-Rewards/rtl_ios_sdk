@@ -1,0 +1,77 @@
+### macOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+*.swp
+
+### Xcode ###
+# User settings
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# Build outputs
+DerivedData/
+build/
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.xcarchive
+
+# Xcode index / logs
+*.xcactivitylog
+*.gcno
+*.gcda
+
+# SwiftPM (if you don't want to commit)
+# Note: Many teams DO commit Package.resolved for apps. For SDKs, it's often OK to commit too.
+.build/
+.swiftpm/
+Package.resolved
+
+### CocoaPods ###
+Pods/
+# If you use CocoaPods, consider committing Podfile.lock for apps.
+Podfile.lock
+*.xcworkspace
+
+### Carthage ###
+Carthage/Build/
+
+### Dependencies / vendor ###
+# If you vendor frameworks locally (uncommon for SDK source repos)
+# Vendor/
+
+### Fastlane ###
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
+### Instruments / Profiling ###
+*.trace
+*.instrument
+
+### Playgrounds ###
+timeline.xctimeline
+playground.xcworkspace
+
+### Archives / temp ###
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+*.tmp
+
+### Secrets ###
+*.p12
+*.mobileprovision
+*.cer
+*.keystore
+*.env
+.env.*
+.idea
