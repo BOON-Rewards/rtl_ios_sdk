@@ -12,6 +12,8 @@ public class RTLWebView: UIView {
 
     // MARK: - Initialization
 
+    private static let consoleLogHandler = "rtlConsoleLog"
+
     init(sdk: RTLSdk) {
         self.sdk = sdk
         self.messageHandler = RTLMessageHandler()
@@ -22,6 +24,15 @@ public class RTLWebView: UIView {
 
         // Add message handler for JavaScript bridge
         contentController.add(messageHandler, name: RTLMessageHandler.handlerName)
+
+        // Add console log capture script
+        let consoleLogScript = WKUserScript(
+            source: RTLWebView.consoleLogOverrideScript,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        )
+        contentController.addUserScript(consoleLogScript)
+        contentController.add(ConsoleLogHandler(), name: RTLWebView.consoleLogHandler)
 
         configuration.userContentController = contentController
         configuration.allowsInlineMediaPlayback = true
@@ -35,12 +46,39 @@ public class RTLWebView: UIView {
         setupWebView()
     }
 
+    private static var consoleLogOverrideScript: String {
+        """
+        (function() {
+            var originalLog = console.log;
+            var originalWarn = console.warn;
+            var originalError = console.error;
+            var originalInfo = console.info;
+
+            function postToNative(level, args) {
+                var message = Array.prototype.slice.call(args).map(function(arg) {
+                    if (typeof arg === 'object') {
+                        try { return JSON.stringify(arg); } catch(e) { return String(arg); }
+                    }
+                    return String(arg);
+                }).join(' ');
+                window.webkit.messageHandlers.rtlConsoleLog.postMessage({level: level, message: message});
+            }
+
+            console.log = function() { postToNative('LOG', arguments); originalLog.apply(console, arguments); };
+            console.warn = function() { postToNative('WARN', arguments); originalWarn.apply(console, arguments); };
+            console.error = function() { postToNative('ERROR', arguments); originalError.apply(console, arguments); };
+            console.info = function() { postToNative('INFO', arguments); originalInfo.apply(console, arguments); };
+        })();
+        """
+    }
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented. Use RTLSdk.shared.createWebView() instead.")
     }
 
     deinit {
         webView.configuration.userContentController.removeScriptMessageHandler(forName: RTLMessageHandler.handlerName)
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: RTLWebView.consoleLogHandler)
     }
 
     // MARK: - Setup
@@ -68,6 +106,14 @@ public class RTLWebView: UIView {
     }
 
     // MARK: - Public Methods
+
+    /// Pre-warm the webview by loading a blank page
+    /// This initializes WKWebView's web processes in the background,
+    /// avoiding the 4-10 second delay when the actual content is loaded
+    public func prewarm() {
+        print("[RTLSdk] 🔥 Pre-warming webview...")
+        webView.loadHTMLString("<html><body></body></html>", baseURL: nil)
+    }
 
     /// Load a URL in the webview
     /// - Parameter url: The URL to load
@@ -109,6 +155,20 @@ public class RTLWebView: UIView {
     /// Check if can go forward
     public var canGoForward: Bool {
         webView.canGoForward
+    }
+
+    /// Post a message to the web content
+    /// - Parameter message: Dictionary to send as JSON via window.postMessage
+    public func postMessage(_ message: [String: Any]) {
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: message),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            print("[RTLSdk] Failed to serialize message to JSON")
+            return
+        }
+
+        print("[RTLSdk] 📤 Posting message to webview: \(jsonString)")
+        let script = "window.postMessage(\(jsonString), '*')"
+        evaluateJavaScript(script)
     }
 }
 
@@ -171,5 +231,22 @@ extension RTLWebView: RTLMessageHandlerDelegate {
 
     func messageHandler(_ handler: RTLMessageHandler, didRequestOpenUrl url: URL, forceExternal: Bool) {
         sdk?.handleOpenUrl(url: url, forceExternal: forceExternal)
+    }
+
+    func messageHandler(_ handler: RTLMessageHandler, didRequestLocationPermission: Void) {
+        sdk?.handleLocationPermissionRequest()
+    }
+}
+
+// MARK: - Console Log Handler
+
+private class ConsoleLogHandler: NSObject, WKScriptMessageHandler {
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let body = message.body as? [String: Any],
+              let level = body["level"] as? String,
+              let logMessage = body["message"] as? String else {
+            return
+        }
+        print("[WebView \(level)] \(logMessage)")
     }
 }

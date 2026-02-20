@@ -322,6 +322,154 @@ The SDK automatically manages token expiration:
 
 This ensures users always have a valid session without manual intervention.
 
+### JWT Token Structure
+
+The JWT token provided to the SDK should contain the following structure:
+
+```json
+{
+  "user": {
+    "id": "2b030a36-ad21-1222-1232-c5bf898d17b1",
+    "gender": "Female",
+    "firstName": "Ericka",
+    "lastName": "N",
+    "email": "user@example.com"
+  },
+  "orgId": "ckp9n3d8y0063ksuvchc6wfgt",
+  "chapterId": "c32047b4-5d99-4505-b733-71f1fde4e570",
+  "pointsPerDollar": 200,
+  "iat": 1754307084,
+  "exp": 1754307144
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `user.id` | Unique user identifier |
+| `user.gender` | User's gender |
+| `user.firstName` | User's first name |
+| `user.lastName` | User's last name |
+| `user.email` | User's email address |
+| `orgId` | Organization identifier |
+| `chapterId` | Chapter identifier |
+| `pointsPerDollar` | Points earned per dollar spent |
+| `iat` | Issued at timestamp (Unix) |
+| `exp` | Expiration timestamp (Unix) |
+
+### Best Practices
+
+- **Set JWT expiry to 1 minute**: For security, generate tokens with a short expiry time (60 seconds). The SDK will request a fresh token via `rtlSdkNeedsToken()` when needed.
+- Generate tokens server-side only - never expose your signing secret in the mobile app
+- Always validate user identity before generating tokens
+
+## Location-Based Notifications
+
+The SDK provides built-in support for geolocation-based notifications. When enabled, the SDK will:
+- Request location permissions from the user
+- Track location changes in the background
+- Fetch nearby stores from the RTL API
+- Set up geofences around stores (100m radius)
+- Show local notifications when user enters a store geofence
+
+### Enabling Location Features
+
+After login, enable location features:
+
+```swift
+// In your login success handler
+RTLSdk.shared.enableLocationFeatures()
+```
+
+The SDK handles all permission requests internally. No additional setup is required in your view controller.
+
+### Location API Reference
+
+#### Methods
+
+##### `enableLocationFeatures()`
+Enables location-based notifications. Requests permissions and sets up geofencing.
+
+```swift
+func enableLocationFeatures()
+```
+
+##### `disableLocationFeatures()`
+Disables location-based notifications and stops all monitoring.
+
+```swift
+func disableLocationFeatures()
+```
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isLocationFeaturesEnabled` | `Bool` | Whether location features are currently enabled |
+| `hasLocationPermission` | `Bool` | Whether background location permission is granted |
+
+### Optional Location Delegate Methods
+
+You can optionally implement these delegate methods to receive location-related callbacks:
+
+```swift
+extension MyViewController: RTLSdkDelegate {
+    // Called when location permission status changes
+    func rtlSdkLocationPermissionDidChange(granted: Bool) {
+        print("Location permission: \(granted)")
+    }
+
+    // Called when user enters a store geofence
+    func rtlSdkDidEnterGeofence(store: RTLStore) {
+        print("Entered geofence for: \(store.name)")
+    }
+}
+```
+
+### RTLStore
+
+Data model for stores returned in geofence callbacks:
+
+```swift
+public struct RTLStore {
+    public let id: String
+    public let name: String
+    public let merchantId: String
+    public let latitude: Double
+    public let longitude: Double
+    public let offerTitle: String?
+    public let offerDescription: String?
+}
+```
+
+### Notification Rate Limiting
+
+The SDK applies intelligent rate limiting to notifications:
+
+| Rule | Value |
+|------|-------|
+| Daily limit | 2 notifications |
+| Weekly limit | 7 notifications |
+| Monthly limit | 20 notifications |
+| Merchant cooldown | 24 hours between same merchant |
+| Time window | 10:00 AM - 8:00 PM only |
+
+### Required Info.plist Entries
+
+Add these entries to your app's Info.plist:
+
+```xml
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>We need your location to show you nearby offers.</string>
+<key>NSLocationAlwaysUsageDescription</key>
+<string>We need background location access to notify you of nearby offers.</string>
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>We need your location to show you nearby offers.</string>
+<key>UIBackgroundModes</key>
+<array>
+    <string>location</string>
+</array>
+```
+
 ## Handling External URLs
 
 When the RTL web app needs to open an external URL, implement `rtlSdkRequestsOpenUrl`:
@@ -369,8 +517,3 @@ open RTLSdkExample.xcodeproj
 - Ensure the delegate is set and `rtlSdkNeedsToken()` is implemented
 - Token refresh only triggers after 20+ hours in background
 
-## License
-
-Copyright (c) 2024 Affina Loyalty. All rights reserved.
-
-This SDK is provided under a proprietary license. Use of this SDK requires a valid business agreement with Affina Loyalty. Unauthorized copying, modification, distribution, or use of this software is strictly prohibited.
