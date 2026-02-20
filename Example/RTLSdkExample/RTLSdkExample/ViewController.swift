@@ -51,7 +51,8 @@ class ViewController: UIViewController {
         RTLSdk.shared.initialize(
             program: "crowdplay",
             environment: .staging,
-            urlScheme: "rtlsdkexample"
+            urlScheme: "rtlsdkexample",
+            externalChapterId: "c32047b4-5d99-4505-b733-71f1fde4e570"
         )
 
         // Set delegate
@@ -85,6 +86,14 @@ class ViewController: UIViewController {
                 // Show full screen webview regardless of login result
                 // (web app handles its own auth state)
                 showFullScreenWebView()
+
+                // Enable location features (SDK handles permissions internally)
+                RTLSdk.shared.enableLocationFeatures()
+
+                #if DEBUG
+                // Reset notification history for testing geofence notifications
+                RTLSdk.shared.resetNotificationHistory()
+                #endif
             }
         }
     }
@@ -134,5 +143,14 @@ extension ViewController: RTLSdkDelegate {
         print("SDK requesting token...")
         // In a real app, call your auth service here
         return testToken
+    }
+
+    // Optional location callbacks
+    func rtlSdkLocationPermissionDidChange(granted: Bool) {
+        print("Location permission changed: \(granted)")
+    }
+
+    func rtlSdkDidEnterGeofence(store: RTLStore) {
+        print("Entered geofence for store: \(store.name)")
     }
 }

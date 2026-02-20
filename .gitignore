@@ -9,6 +9,7 @@
 ### Xcode ###
 # User settings
 xcuserdata/
+**/xcuserdata/
 *.xcuserstate
 *.xccheckout
 *.xcscmblueprint

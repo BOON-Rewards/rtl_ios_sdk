@@ -46,5 +46,15 @@
             </array>
         </dict>
     </array>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>We need your location to show you nearby offers and deals.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>We need background location access to notify you of nearby offers even when the app is closed.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>We need your location to show you nearby offers and deals.</string>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>location</string>
+    </array>
 </dict>
 </plist>

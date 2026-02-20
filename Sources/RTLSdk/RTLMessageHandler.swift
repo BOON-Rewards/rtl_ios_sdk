@@ -7,6 +7,7 @@ protocol RTLMessageHandlerDelegate: AnyObject {
     func messageHandler(_ handler: RTLMessageHandler, didReceiveUserLogout: Void)
     func messageHandler(_ handler: RTLMessageHandler, didReceiveAppReady: Void)
     func messageHandler(_ handler: RTLMessageHandler, didRequestOpenUrl url: URL, forceExternal: Bool)
+    func messageHandler(_ handler: RTLMessageHandler, didRequestLocationPermission: Void)
 }
 
 /// Handles JavaScript messages from the RTL web app
@@ -69,9 +70,12 @@ final class RTLMessageHandler: NSObject, WKScriptMessageHandler {
         case .appReady:
             delegate?.messageHandler(self, didReceiveAppReady: ())
 
-        case .locationPermissionRequest, .locationPermissionStatus, .locationUpdate:
-            // Not implemented in SDK - can be handled by host app if needed
-            print("[RTLSdk] Location message type not handled: \(messageType.rawValue)")
+        case .locationPermissionRequest:
+            delegate?.messageHandler(self, didRequestLocationPermission: ())
+
+        case .locationPermissionStatus, .locationUpdate:
+            // These are outgoing messages, not expected from web
+            print("[RTLSdk] Unexpected incoming location message: \(messageType.rawValue)")
         }
     }
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Delegate protocol for receiving RTL SDK events
-public protocol RTLSdkDelegate: AnyObject {
+@objc public protocol RTLSdkDelegate: AnyObject {
 
     /// Called when user authentication succeeds
     /// - Parameters:
@@ -25,6 +25,16 @@ public protocol RTLSdkDelegate: AnyObject {
     /// This is called on initial webview load and when token expires after 20 hours
     /// - Returns: JWT token string, or nil if unavailable
     func rtlSdkNeedsToken() async -> String?
+
+    // MARK: - Location Callbacks (Optional)
+
+    /// Called when location permission status changes
+    /// - Parameter granted: true if background location permission is granted
+    @objc optional func rtlSdkLocationPermissionDidChange(granted: Bool)
+
+    /// Called when user enters a store geofence
+    /// - Parameter store: The store that was entered
+    @objc optional func rtlSdkDidEnterGeofence(store: RTLStore)
 }
 
 // MARK: - Default Implementations
