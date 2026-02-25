@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import WebKit
 import CoreLocation
+import SafariServices
 
 /// Main SDK singleton for RTL webview integration
 public final class RTLSdk {
@@ -428,7 +429,44 @@ public final class RTLSdk {
 
     /// Called internally when openExternalUrl message is received
     internal func handleOpenUrl(url: URL, forceExternal: Bool) {
-        delegate?.rtlSdkRequestsOpenUrl(url: url, forceExternal: forceExternal)
+        if forceExternal {
+            // Open in external browser via delegate
+            delegate?.rtlSdkRequestsOpenUrl(url: url, forceExternal: true)
+        } else {
+            // Open in-app browser (SFSafariViewController)
+            presentInAppBrowser(url: url)
+        }
+    }
+
+    /// Present an in-app browser using SFSafariViewController
+    private func presentInAppBrowser(url: URL) {
+        guard let topVC = getTopViewController() else {
+            print("[RTLSdk] Cannot present in-app browser: no top view controller")
+            // Fallback to external browser
+            delegate?.rtlSdkRequestsOpenUrl(url: url, forceExternal: true)
+            return
+        }
+
+        let safariVC = SFSafariViewController(url: url)
+        safariVC.modalPresentationStyle = .pageSheet
+        topVC.present(safariVC, animated: true)
+    }
+
+    /// Get the topmost view controller for presenting modals
+    private func getTopViewController() -> UIViewController? {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let window = windowScene.windows.first(where: { $0.isKeyWindow }),
+              let rootVC = window.rootViewController else {
+            return nil
+        }
+
+        var topVC = rootVC
+        while let presented = topVC.presentedViewController {
+            topVC = presented
+        }
+        return topVC
     }
 
     // MARK: - Private Methods
