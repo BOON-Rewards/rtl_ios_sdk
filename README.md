@@ -72,12 +72,12 @@ class MyViewController: UIViewController, RTLSdkDelegate {
 
     // MARK: - RTLSdkDelegate
 
-    func rtlSdkNeedsToken() async -> String? {
+    func onNeedsToken() async -> String? {
         // Return JWT token from your auth system
         return await MyAuthService.getToken()
     }
 
-    func rtlSdkDidAuthenticate(accessToken: String, refreshToken: String) {
+    func onAuthenticated(accessToken: String, refreshToken: String) {
         print("Authenticated!")
     }
 }
@@ -125,10 +125,10 @@ NSLayoutConstraint.activate([
 
 ### Step 4: Implement Token Provider
 
-Implement `rtlSdkNeedsToken()` to provide tokens when the SDK needs them:
+Implement `onNeedsToken()` to provide tokens when the SDK needs them:
 
 ```swift
-func rtlSdkNeedsToken() async -> String? {
+func onNeedsToken() async -> String? {
     // Fetch token from your authentication service
     do {
         let token = try await MyAuthService.fetchJWTToken()
@@ -225,18 +225,6 @@ Triggers logout in the webview.
 func logout()
 ```
 
-##### `registerPushToken(_:type:)`
-Registers a push notification token with the RTL backend.
-
-```swift
-func registerPushToken(_ token: String, type: RTLTokenType)
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `token` | `String` | The device push token |
-| `type` | `RTLTokenType` | `.apns` or `.fcm` |
-
 ##### `isLoggedIn()`
 Returns the current login state.
 
@@ -254,19 +242,19 @@ Protocol for receiving SDK events. All methods have default empty implementation
 public protocol RTLSdkDelegate: AnyObject {
 
     /// Called when SDK needs a token (initial login or refresh)
-    func rtlSdkNeedsToken() async -> String?
+    func onNeedsToken() async -> String?
 
     /// Called when authentication succeeds
-    func rtlSdkDidAuthenticate(accessToken: String, refreshToken: String)
+    func onAuthenticated(accessToken: String, refreshToken: String)
 
     /// Called when user logs out
-    func rtlSdkDidLogout()
+    func onLogout()
 
-    /// Called when RTL requests to open a URL
-    func rtlSdkRequestsOpenUrl(url: URL, forceExternal: Bool)
+    /// Called when RTL opens a URL (informational)
+    func onOpenUrl(url: URL, forceExternal: Bool)
 
     /// Called when RTL web app is ready
-    func rtlSdkDidBecomeReady()
+    func onReady()
 }
 ```
 
@@ -274,11 +262,11 @@ public protocol RTLSdkDelegate: AnyObject {
 
 | Method | Description |
 |--------|-------------|
-| `rtlSdkNeedsToken()` | **Required for login.** Return a JWT token or `nil` if unavailable. |
-| `rtlSdkDidAuthenticate(accessToken:refreshToken:)` | Called when user successfully authenticates. |
-| `rtlSdkDidLogout()` | Called when user logs out. |
-| `rtlSdkRequestsOpenUrl(url:forceExternal:)` | Called when RTL requests to open a URL. Open in Safari if `forceExternal` is true. |
-| `rtlSdkDidBecomeReady()` | Called when the RTL web app has finished loading. |
+| `onNeedsToken()` | **Required for login.** Return a JWT token or `nil` if unavailable. |
+| `onAuthenticated(accessToken:refreshToken:)` | Called when user successfully authenticates. |
+| `onLogout()` | Called when user logs out. |
+| `onOpenUrl(url:forceExternal:)` | Called after SDK opens a URL (informational). |
+| `onReady()` | Called when the RTL web app has finished loading. |
 
 ### RTLEnvironment
 
@@ -288,15 +276,6 @@ Environment configuration enum.
 |------|----------------|
 | `.staging` | `{program}.staging.getboon.com` |
 | `.production` | `{program}.prod.getboon.com` |
-
-### RTLTokenType
-
-Push notification token type enum.
-
-| Case | Value | Description |
-|------|-------|-------------|
-| `.apns` | `"apns"` | Apple Push Notification Service |
-| `.fcm` | `"fcm"` | Firebase Cloud Messaging |
 
 ### RTLWebView
 
@@ -317,7 +296,7 @@ Embeddable webview for the RTL experience.
 The SDK automatically manages token expiration:
 
 - Tokens are considered valid for **20 hours**
-- When the app returns to foreground after 20+ hours, the SDK automatically calls `rtlSdkNeedsToken()` to get a fresh token
+- When the app returns to foreground after 20+ hours, the SDK automatically calls `onNeedsToken()` to get a fresh token
 - The webview is automatically reloaded with the new token
 
 This ensures users always have a valid session without manual intervention.
@@ -358,7 +337,7 @@ The JWT token provided to the SDK should contain the following structure:
 
 ### Best Practices
 
-- **Set JWT expiry to 1 minute**: For security, generate tokens with a short expiry time (60 seconds). The SDK will request a fresh token via `rtlSdkNeedsToken()` when needed.
+- **Set JWT expiry to 1 minute**: For security, generate tokens with a short expiry time (60 seconds). The SDK will request a fresh token via `onNeedsToken()` when needed.
 - Generate tokens server-side only - never expose your signing secret in the mobile app
 - Always validate user identity before generating tokens
 
@@ -414,12 +393,12 @@ You can optionally implement these delegate methods to receive location-related 
 ```swift
 extension MyViewController: RTLSdkDelegate {
     // Called when location permission status changes
-    func rtlSdkLocationPermissionDidChange(granted: Bool) {
+    func onLocationPermissionChange(granted: Bool) {
         print("Location permission: \(granted)")
     }
 
     // Called when user enters a store geofence
-    func rtlSdkDidEnterGeofence(store: RTLStore) {
+    func onGeofenceEnter(store: RTLStore) {
         print("Entered geofence for: \(store.name)")
     }
 }
@@ -472,18 +451,16 @@ Add these entries to your app's Info.plist:
 
 ## Handling External URLs
 
-When the RTL web app needs to open an external URL, implement `rtlSdkRequestsOpenUrl`:
+The SDK automatically handles all URL requests:
+- **In-app browser** (`forceExternal: false`): Opens in `SFSafariViewController`
+- **External browser** (`forceExternal: true`): Opens in Safari
+
+The delegate callback is informational - you can use it for logging or analytics:
 
 ```swift
-func rtlSdkRequestsOpenUrl(url: URL, forceExternal: Bool) {
-    if forceExternal {
-        // Must open in Safari
-        UIApplication.shared.open(url)
-    } else {
-        // Can use in-app browser (SFSafariViewController) or Safari
-        let safari = SFSafariViewController(url: url)
-        present(safari, animated: true)
-    }
+func onOpenUrl(url: URL, forceExternal: Bool) {
+    // Optional: Log for analytics
+    Analytics.log("URL opened", properties: ["url": url.absoluteString, "external": forceExternal])
 }
 ```
 
@@ -505,7 +482,7 @@ open RTLSdkExample.xcodeproj
 
 ### WebView shows blank screen
 - Ensure you've called `initialize()` before `createWebView()`
-- Verify `rtlSdkNeedsToken()` returns a valid token
+- Verify `onNeedsToken()` returns a valid token
 - Check the console for `[RTLSdk]` logs
 
 ### Login times out
@@ -514,6 +491,6 @@ open RTLSdkExample.xcodeproj
 - Check network connectivity
 
 ### Token refresh not working
-- Ensure the delegate is set and `rtlSdkNeedsToken()` is implemented
+- Ensure the delegate is set and `onNeedsToken()` is implemented
 - Token refresh only triggers after 20+ hours in background
 

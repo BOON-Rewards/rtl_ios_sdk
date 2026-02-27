@@ -7,47 +7,48 @@ import Foundation
     /// - Parameters:
     ///   - accessToken: The access token from authentication
     ///   - refreshToken: The refresh token from authentication
-    func rtlSdkDidAuthenticate(accessToken: String, refreshToken: String)
+    func onAuthenticated(accessToken: String, refreshToken: String)
 
     /// Called when user logs out
-    func rtlSdkDidLogout()
+    func onLogout()
 
-    /// Called when the RTL web app requests opening a URL
+    /// Called when the RTL web app opens a URL (informational)
+    /// URLs are handled automatically by the SDK
     /// - Parameters:
-    ///   - url: The URL to open
-    ///   - forceExternal: If true, should open in external browser; otherwise can use in-app browser
-    func rtlSdkRequestsOpenUrl(url: URL, forceExternal: Bool)
+    ///   - url: The URL that was opened
+    ///   - forceExternal: If true, opened in external browser; otherwise in-app browser
+    func onOpenUrl(url: URL, forceExternal: Bool)
 
     /// Called when the RTL web app has finished loading and is ready
-    func rtlSdkDidBecomeReady()
+    func onReady()
 
     /// Called when SDK needs a fresh token from the host app
     /// This is called on initial webview load and when token expires after 20 hours
     /// - Returns: JWT token string, or nil if unavailable
-    func rtlSdkNeedsToken() async -> String?
+    func onNeedsToken() async -> String?
 
     // MARK: - Location Callbacks (Optional)
 
     /// Called when location permission status changes
     /// - Parameter granted: true if background location permission is granted
-    @objc optional func rtlSdkLocationPermissionDidChange(granted: Bool)
+    @objc optional func onLocationPermissionChange(granted: Bool)
 
     /// Called when user enters a store geofence
     /// - Parameter store: The store that was entered
-    @objc optional func rtlSdkDidEnterGeofence(store: RTLStore)
+    @objc optional func onGeofenceEnter(store: RTLStore)
 }
 
 // MARK: - Default Implementations
 
 public extension RTLSdkDelegate {
 
-    func rtlSdkDidAuthenticate(accessToken: String, refreshToken: String) {}
+    func onAuthenticated(accessToken: String, refreshToken: String) {}
 
-    func rtlSdkDidLogout() {}
+    func onLogout() {}
 
-    func rtlSdkRequestsOpenUrl(url: URL, forceExternal: Bool) {}
+    func onOpenUrl(url: URL, forceExternal: Bool) {}
 
-    func rtlSdkDidBecomeReady() {}
+    func onReady() {}
 
-    func rtlSdkNeedsToken() async -> String? { nil }
+    func onNeedsToken() async -> String? { nil }
 }

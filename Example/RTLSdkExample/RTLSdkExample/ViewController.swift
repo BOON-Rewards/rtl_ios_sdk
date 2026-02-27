@@ -115,11 +115,11 @@ class ViewController: UIViewController {
 
 extension ViewController: RTLSdkDelegate {
 
-    func rtlSdkDidAuthenticate(accessToken: String, refreshToken: String) {
+    func onAuthenticated(accessToken: String, refreshToken: String) {
         print("Authenticated! Access token: \(accessToken.prefix(20))...")
     }
 
-    func rtlSdkDidLogout() {
+    func onLogout() {
         print("User logged out")
         // Show login UI again
         rtlWebView?.isHidden = true
@@ -130,27 +130,27 @@ extension ViewController: RTLSdkDelegate {
         navigationController?.setNavigationBarHidden(false, animated: true)
     }
 
-    func rtlSdkRequestsOpenUrl(url: URL, forceExternal: Bool) {
-        print("Open URL requested: \(url), forceExternal: \(forceExternal)")
-        UIApplication.shared.open(url)
+    func onOpenUrl(url: URL, forceExternal: Bool) {
+        print("URL opened: \(url), forceExternal: \(forceExternal)")
+        // URL is already opened by SDK - this callback is informational
     }
 
-    func rtlSdkDidBecomeReady() {
+    func onReady() {
         print("RTL app is ready")
     }
 
-    func rtlSdkNeedsToken() async -> String? {
+    func onNeedsToken() async -> String? {
         print("SDK requesting token...")
         // In a real app, call your auth service here
         return testToken
     }
 
     // Optional location callbacks
-    func rtlSdkLocationPermissionDidChange(granted: Bool) {
+    func onLocationPermissionChange(granted: Bool) {
         print("Location permission changed: \(granted)")
     }
 
-    func rtlSdkDidEnterGeofence(store: RTLStore) {
+    func onGeofenceEnter(store: RTLStore) {
         print("Entered geofence for store: \(store.name)")
     }
 }

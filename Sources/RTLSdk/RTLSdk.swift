@@ -110,7 +110,7 @@ public final class RTLSdk {
     /// Called on initial webview show and when token expires
     @MainActor
     public func requestTokenAndLogin() async -> Bool {
-        guard let token = await delegate?.rtlSdkNeedsToken() else {
+        guard let token = await delegate?.onNeedsToken() else {
             print("[RTLSdk] Token requested but delegate returned nil")
             return false
         }
@@ -159,16 +159,6 @@ public final class RTLSdk {
         webView?.evaluateJavaScript(script)
     }
 
-    /// Register a push notification token with the RTL backend
-    /// - Parameters:
-    ///   - token: The device push token
-    ///   - type: The token type (.apns or .fcm)
-    public func registerPushToken(_ token: String, type: RTLTokenType) {
-        let escapedToken = token.replacingOccurrences(of: "'", with: "\\'")
-        let script = "window.rtlNative?.registerPushToken('\(escapedToken)', '\(type.rawValue)')"
-        webView?.evaluateJavaScript(script)
-    }
-
     // MARK: - Location Features
 
     /// Enable location-based notifications
@@ -205,7 +195,7 @@ public final class RTLSdk {
         // Set up permission change handler
         // Only send to webview if it explicitly requested permission status
         locationManager?.onPermissionChange = { [weak self] granted in
-            self?.delegate?.rtlSdkLocationPermissionDidChange?(granted: granted)
+            self?.delegate?.onLocationPermissionChange?(granted: granted)
 
             // Send to webview if it's waiting for a permission response
             if self?.webviewAwaitingPermissionResponse == true {
@@ -217,7 +207,7 @@ public final class RTLSdk {
         // Set up geofence enter handler
         geofenceManager?.onGeofenceEnter = { [weak self] store in
             self?.notificationManager?.showNotification(for: store)
-            self?.delegate?.rtlSdkDidEnterGeofence?(store: store)
+            self?.delegate?.onGeofenceEnter?(store: store)
         }
 
         // Request permissions
@@ -404,21 +394,21 @@ public final class RTLSdk {
     internal func handleUserAuthReceived(accessToken: String, refreshToken: String) {
         _isLoggedIn = true
         lastTokenTimestamp = Date()
-        delegate?.rtlSdkDidAuthenticate(accessToken: accessToken, refreshToken: refreshToken)
+        delegate?.onAuthenticated(accessToken: accessToken, refreshToken: refreshToken)
         completeLogin(success: true)
     }
 
     /// Called internally when userLogout message is received
     internal func handleUserLogoutReceived() {
         _isLoggedIn = false
-        delegate?.rtlSdkDidLogout()
+        delegate?.onLogout()
     }
 
     /// Called internally when appReady message is received
     internal func handleAppReady() {
         print("[RTLSdk] Received appReady from webview")
         webviewIsReady = true
-        delegate?.rtlSdkDidBecomeReady()
+        delegate?.onReady()
 
         // Send current location permission status to webview now that it's ready
         if locationFeaturesEnabled {
@@ -430,20 +420,22 @@ public final class RTLSdk {
     /// Called internally when openExternalUrl message is received
     internal func handleOpenUrl(url: URL, forceExternal: Bool) {
         if forceExternal {
-            // Open in external browser via delegate
-            delegate?.rtlSdkRequestsOpenUrl(url: url, forceExternal: true)
+            // Open in external browser (Safari)
+            UIApplication.shared.open(url)
         } else {
             // Open in-app browser (SFSafariViewController)
             presentInAppBrowser(url: url)
         }
+        // Notify delegate (informational - no action required)
+        delegate?.onOpenUrl(url: url, forceExternal: forceExternal)
     }
 
     /// Present an in-app browser using SFSafariViewController
     private func presentInAppBrowser(url: URL) {
         guard let topVC = getTopViewController() else {
-            print("[RTLSdk] Cannot present in-app browser: no top view controller")
+            print("[RTLSdk] Cannot present in-app browser: no top view controller, falling back to Safari")
             // Fallback to external browser
-            delegate?.rtlSdkRequestsOpenUrl(url: url, forceExternal: true)
+            UIApplication.shared.open(url)
             return
         }
 
