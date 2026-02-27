@@ -72,12 +72,12 @@ class MyViewController: UIViewController, RTLSdkDelegate {
 
     // MARK: - RTLSdkDelegate
 
-    func rtlSdkNeedsToken() async -> String? {
+    func onNeedsToken() async -> String? {
         // Return JWT token from your auth system
         return await MyAuthService.getToken()
     }
 
-    func rtlSdkDidAuthenticate(accessToken: String, refreshToken: String) {
+    func onAuthenticated(accessToken: String, refreshToken: String) {
         print("Authenticated!")
     }
 }
@@ -125,10 +125,10 @@ NSLayoutConstraint.activate([
 
 ### Step 4: Implement Token Provider
 
-Implement `rtlSdkNeedsToken()` to provide tokens when the SDK needs them:
+Implement `onNeedsToken()` to provide tokens when the SDK needs them:
 
 ```swift
-func rtlSdkNeedsToken() async -> String? {
+func onNeedsToken() async -> String? {
     // Fetch token from your authentication service
     do {
         let token = try await MyAuthService.fetchJWTToken()
@@ -225,18 +225,6 @@ Triggers logout in the webview.
 func logout()
 ```
 
-##### `registerPushToken(_:type:)`
-Registers a push notification token with the RTL backend.
-
-```swift
-func registerPushToken(_ token: String, type: RTLTokenType)
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `token` | `String` | The device push token |
-| `type` | `RTLTokenType` | `.apns` or `.fcm` |
-
 ##### `isLoggedIn()`
 Returns the current login state.
 
@@ -254,19 +242,19 @@ Protocol for receiving SDK events. All methods have default empty implementation
 public protocol RTLSdkDelegate: AnyObject {
 
     /// Called when SDK needs a token (initial login or refresh)
-    func rtlSdkNeedsToken() async -> String?
+    func onNeedsToken() async -> String?
 
     /// Called when authentication succeeds
-    func rtlSdkDidAuthenticate(accessToken: String, refreshToken: String)
+    func onAuthenticated(accessToken: String, refreshToken: String)
 
     /// Called when user logs out
-    func rtlSdkDidLogout()
+    func onLogout()
 
-    /// Called when RTL requests to open a URL
-    func rtlSdkRequestsOpenUrl(url: URL, forceExternal: Bool)
+    /// Called when RTL opens a URL (informational)
+    func onOpenUrl(url: URL, forceExternal: Bool)
 
     /// Called when RTL web app is ready
-    func rtlSdkDidBecomeReady()
+    func onReady()
 }
 ```
 
@@ -274,11 +262,11 @@ public protocol RTLSdkDelegate: AnyObject {
 
 | Method | Description |
 |--------|-------------|
-| `rtlSdkNeedsToken()` | **Required for login.** Return a JWT token or `nil` if unavailable. |
-| `rtlSdkDidAuthenticate(accessToken:refreshToken:)` | Called when user successfully authenticates. |
-| `rtlSdkDidLogout()` | Called when user logs out. |
-| `rtlSdkRequestsOpenUrl(url:forceExternal:)` | Called when RTL requests to open a URL. Open in Safari if `forceExternal` is true. |
-| `rtlSdkDidBecomeReady()` | Called when the RTL web app has finished loading. |
+| `onNeedsToken()` | **Required for login.** Return a JWT token or `nil` if unavailable. |
+| `onAuthenticated(accessToken:refreshToken:)` | Called when user successfully authenticates. |
+| `onLogout()` | Called when user logs out. |
+| `onOpenUrl(url:forceExternal:)` | Called after SDK opens a URL (informational). |
+| `onReady()` | Called when the RTL web app has finished loading. |
 
 ### RTLEnvironment
 
@@ -288,15 +276,6 @@ Environment configuration enum.
 |------|----------------|
 | `.staging` | `{program}.staging.getboon.com` |
 | `.production` | `{program}.prod.getboon.com` |
-
-### RTLTokenType
-
-Push notification token type enum.
-
-| Case | Value | Description |
-|------|-------|-------------|
-| `.apns` | `"apns"` | Apple Push Notification Service |
-| `.fcm` | `"fcm"` | Firebase Cloud Messaging |
 
 ### RTLWebView
 
@@ -317,25 +296,171 @@ Embeddable webview for the RTL experience.
 The SDK automatically manages token expiration:
 
 - Tokens are considered valid for **20 hours**
-- When the app returns to foreground after 20+ hours, the SDK automatically calls `rtlSdkNeedsToken()` to get a fresh token
+- When the app returns to foreground after 20+ hours, the SDK automatically calls `onNeedsToken()` to get a fresh token
 - The webview is automatically reloaded with the new token
 
 This ensures users always have a valid session without manual intervention.
 
-## Handling External URLs
+### JWT Token Structure
 
-When the RTL web app needs to open an external URL, implement `rtlSdkRequestsOpenUrl`:
+The JWT token provided to the SDK should contain the following structure:
+
+```json
+{
+  "user": {
+    "id": "2b030a36-ad21-1222-1232-c5bf898d17b1",
+    "gender": "Female",
+    "firstName": "Ericka",
+    "lastName": "N",
+    "email": "user@example.com"
+  },
+  "orgId": "ckp9n3d8y0063ksuvchc6wfgt",
+  "chapterId": "c32047b4-5d99-4505-b733-71f1fde4e570",
+  "pointsPerDollar": 200,
+  "iat": 1754307084,
+  "exp": 1754307144
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `user.id` | Unique user identifier |
+| `user.gender` | User's gender |
+| `user.firstName` | User's first name |
+| `user.lastName` | User's last name |
+| `user.email` | User's email address |
+| `orgId` | Organization identifier |
+| `chapterId` | Chapter identifier |
+| `pointsPerDollar` | Points earned per dollar spent |
+| `iat` | Issued at timestamp (Unix) |
+| `exp` | Expiration timestamp (Unix) |
+
+### Best Practices
+
+- **Set JWT expiry to 1 minute**: For security, generate tokens with a short expiry time (60 seconds). The SDK will request a fresh token via `onNeedsToken()` when needed.
+- Generate tokens server-side only - never expose your signing secret in the mobile app
+- Always validate user identity before generating tokens
+
+## Location-Based Notifications
+
+The SDK provides built-in support for geolocation-based notifications. When enabled, the SDK will:
+- Request location permissions from the user
+- Track location changes in the background
+- Fetch nearby stores from the RTL API
+- Set up geofences around stores (100m radius)
+- Show local notifications when user enters a store geofence
+
+### Enabling Location Features
+
+After login, enable location features:
 
 ```swift
-func rtlSdkRequestsOpenUrl(url: URL, forceExternal: Bool) {
-    if forceExternal {
-        // Must open in Safari
-        UIApplication.shared.open(url)
-    } else {
-        // Can use in-app browser (SFSafariViewController) or Safari
-        let safari = SFSafariViewController(url: url)
-        present(safari, animated: true)
+// In your login success handler
+RTLSdk.shared.enableLocationFeatures()
+```
+
+The SDK handles all permission requests internally. No additional setup is required in your view controller.
+
+### Location API Reference
+
+#### Methods
+
+##### `enableLocationFeatures()`
+Enables location-based notifications. Requests permissions and sets up geofencing.
+
+```swift
+func enableLocationFeatures()
+```
+
+##### `disableLocationFeatures()`
+Disables location-based notifications and stops all monitoring.
+
+```swift
+func disableLocationFeatures()
+```
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isLocationFeaturesEnabled` | `Bool` | Whether location features are currently enabled |
+| `hasLocationPermission` | `Bool` | Whether background location permission is granted |
+
+### Optional Location Delegate Methods
+
+You can optionally implement these delegate methods to receive location-related callbacks:
+
+```swift
+extension MyViewController: RTLSdkDelegate {
+    // Called when location permission status changes
+    func onLocationPermissionChange(granted: Bool) {
+        print("Location permission: \(granted)")
     }
+
+    // Called when user enters a store geofence
+    func onGeofenceEnter(store: RTLStore) {
+        print("Entered geofence for: \(store.name)")
+    }
+}
+```
+
+### RTLStore
+
+Data model for stores returned in geofence callbacks:
+
+```swift
+public struct RTLStore {
+    public let id: String
+    public let name: String
+    public let merchantId: String
+    public let latitude: Double
+    public let longitude: Double
+    public let offerTitle: String?
+    public let offerDescription: String?
+}
+```
+
+### Notification Rate Limiting
+
+The SDK applies intelligent rate limiting to notifications:
+
+| Rule | Value |
+|------|-------|
+| Daily limit | 2 notifications |
+| Weekly limit | 7 notifications |
+| Monthly limit | 20 notifications |
+| Merchant cooldown | 24 hours between same merchant |
+| Time window | 10:00 AM - 8:00 PM only |
+
+### Required Info.plist Entries
+
+Add these entries to your app's Info.plist:
+
+```xml
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>We need your location to show you nearby offers.</string>
+<key>NSLocationAlwaysUsageDescription</key>
+<string>We need background location access to notify you of nearby offers.</string>
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>We need your location to show you nearby offers.</string>
+<key>UIBackgroundModes</key>
+<array>
+    <string>location</string>
+</array>
+```
+
+## Handling External URLs
+
+The SDK automatically handles all URL requests:
+- **In-app browser** (`forceExternal: false`): Opens in `SFSafariViewController`
+- **External browser** (`forceExternal: true`): Opens in Safari
+
+The delegate callback is informational - you can use it for logging or analytics:
+
+```swift
+func onOpenUrl(url: URL, forceExternal: Bool) {
+    // Optional: Log for analytics
+    Analytics.log("URL opened", properties: ["url": url.absoluteString, "external": forceExternal])
 }
 ```
 
@@ -357,7 +482,7 @@ open RTLSdkExample.xcodeproj
 
 ### WebView shows blank screen
 - Ensure you've called `initialize()` before `createWebView()`
-- Verify `rtlSdkNeedsToken()` returns a valid token
+- Verify `onNeedsToken()` returns a valid token
 - Check the console for `[RTLSdk]` logs
 
 ### Login times out
@@ -366,11 +491,6 @@ open RTLSdkExample.xcodeproj
 - Check network connectivity
 
 ### Token refresh not working
-- Ensure the delegate is set and `rtlSdkNeedsToken()` is implemented
+- Ensure the delegate is set and `onNeedsToken()` is implemented
 - Token refresh only triggers after 20+ hours in background
 
-## License
-
-Copyright (c) 2024 Affina Loyalty. All rights reserved.
-
-This SDK is provided under a proprietary license. Use of this SDK requires a valid business agreement with Affina Loyalty. Unauthorized copying, modification, distribution, or use of this software is strictly prohibited.

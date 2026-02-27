@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<gpx version="1.1" creator="RTLSdk Geofence Testing">
+  <metadata>
+    <name>Upper West Side CVS Walk</name>
+    <desc>Walk to trigger CVS geofence at 540 Amsterdam Ave (40.788114, -73.974911)</desc>
+  </metadata>
+
+  <!-- Start north, clearly outside all geofences -->
+  <wpt lat="40.7950" lon="-73.9700">
+    <name>1. Start - North (outside geofences)</name>
+    <time>2024-01-01T12:00:00Z</time>
+  </wpt>
+
+  <!-- Move south toward CVS 540 Amsterdam Ave -->
+  <wpt lat="40.7920" lon="-73.9720">
+    <name>2. Walking south</name>
+    <time>2024-01-01T12:00:30Z</time>
+  </wpt>
+
+  <!-- Getting closer to CVS at 540 Amsterdam Ave -->
+  <wpt lat="40.7900" lon="-73.9740">
+    <name>3. Approaching CVS area</name>
+    <time>2024-01-01T12:01:00Z</time>
+  </wpt>
+
+  <!-- Just outside CVS 540 Amsterdam Ave geofence (100m away) -->
+  <wpt lat="40.7890" lon="-73.9745">
+    <name>4. Near CVS 540 Amsterdam (outside)</name>
+    <time>2024-01-01T12:01:30Z</time>
+  </wpt>
+
+  <!-- ENTER CVS 540 Amsterdam Ave - EXACT store coordinates -->
+  <wpt lat="40.788114" lon="-73.974911">
+    <name>5. ENTER CVS 540 Amsterdam Ave</name>
+    <time>2024-01-01T12:02:00Z</time>
+  </wpt>
+
+  <!-- Stay at exact location -->
+  <wpt lat="40.788114" lon="-73.974911">
+    <name>6. Inside CVS geofence</name>
+    <time>2024-01-01T12:02:30Z</time>
+  </wpt>
+
+  <!-- Move to CVS at 2182 Broadway (40.782591, -73.980459) -->
+  <wpt lat="40.7850" lon="-73.9780">
+    <name>7. Moving toward 2182 Broadway</name>
+    <time>2024-01-01T12:03:00Z</time>
+  </wpt>
+
+  <!-- ENTER CVS 2182 Broadway - EXACT store coordinates -->
+  <wpt lat="40.782591" lon="-73.980459">
+    <name>8. ENTER CVS 2182 Broadway</name>
+    <time>2024-01-01T12:03:30Z</time>
+  </wpt>
+
+  <!-- Stay at location -->
+  <wpt lat="40.782591" lon="-73.980459">
+    <name>9. Inside CVS 2182 Broadway</name>
+    <time>2024-01-01T12:04:00Z</time>
+  </wpt>
+
+  <!-- Move to CVS at 200 West End Ave (40.77819, -73.985196) -->
+  <wpt lat="40.7800" lon="-73.9830">
+    <name>10. Moving toward West End Ave</name>
+    <time>2024-01-01T12:04:30Z</time>
+  </wpt>
+
+  <!-- ENTER CVS 200 West End Ave - EXACT store coordinates -->
+  <wpt lat="40.77819" lon="-73.985196">
+    <name>11. ENTER CVS 200 West End Ave</name>
+    <time>2024-01-01T12:05:00Z</time>
+  </wpt>
+
+  <!-- Stay at location -->
+  <wpt lat="40.77819" lon="-73.985196">
+    <name>12. Inside CVS 200 West End Ave</name>
+    <time>2024-01-01T12:05:30Z</time>
+  </wpt>
+</gpx>
