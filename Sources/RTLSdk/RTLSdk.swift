@@ -4,6 +4,24 @@ import WebKit
 import CoreLocation
 import SafariServices
 
+public struct RTLExperienceResult {
+    public let success: Bool
+    public let errorCode: String?
+
+    public init(success: Bool, errorCode: String? = nil) {
+        self.success = success
+        self.errorCode = errorCode
+    }
+}
+
+private enum RTLExperienceError: String {
+    case token_unavailable
+    case webview_not_created
+    case invalid_token_forward_url
+    case login_timeout
+    case request_cancelled
+}
+
 /// Main SDK singleton for RTL webview integration
 public final class RTLSdk {
 
@@ -37,7 +55,7 @@ public final class RTLSdk {
 
     // MARK: - Async Login
 
-    private var loginContinuation: CheckedContinuation<Bool, Never>?
+    private var loginContinuation: CheckedContinuation<RTLExperienceResult, Never>?
     private var loginTimeoutTask: Task<Void, Never>?
     private let loginTimeout: TimeInterval = 30.0
 
@@ -65,16 +83,24 @@ public final class RTLSdk {
 
     private init() {}
 
-    /// Initialize the SDK with configuration
+    /// Initialize the SDK with configuration and delegate.
     /// - Parameters:
     ///   - program: The program identifier (e.g., "crowdplay")
     ///   - environment: The target environment (.staging or .production)
     ///   - urlScheme: The app's URL scheme for deep linking
+    ///   - delegate: Delegate for receiving SDK events
     ///   - externalChapterId: The external chapter ID for location-based features (optional)
-    public func initialize(program: String, environment: RTLEnvironment, urlScheme: String, externalChapterId: String? = nil) {
+    public func initialize(
+        program: String,
+        environment: RTLEnvironment,
+        urlScheme: String,
+        delegate: RTLSdkDelegate?,
+        externalChapterId: String? = nil
+    ) {
         self.program = program
         self.environment = environment
         self.urlScheme = urlScheme
+        self.delegate = delegate
         self.externalChapterId = externalChapterId
         self.isInitialized = true
         self._isLoggedIn = false
@@ -97,6 +123,7 @@ public final class RTLSdk {
             fatalError("RTLSdk not initialized. Call initialize() first.")
         }
         let webView = RTLWebView(sdk: self)
+        webView.isHidden = true
         self.webView = webView
 
         // Pre-warm the webview to avoid cold-start delay (4-10 seconds)
@@ -106,25 +133,25 @@ public final class RTLSdk {
         return webView
     }
 
-    /// Request token from delegate and perform login
-    /// Called on initial webview show and when token expires
+    /// Request token from delegate and perform login.
+    /// Called on initial webview show and when token expires.
     @MainActor
-    public func requestTokenAndLogin() async -> Bool {
+    public func presentExperience() async -> RTLExperienceResult {
         guard let token = await delegate?.onNeedsToken() else {
             print("[RTLSdk] Token requested but delegate returned nil")
-            return false
+            return .failure(.token_unavailable)
         }
         return await login(token: token)
     }
 
-    /// Async login that completes when userAuth message is received or times out
+    /// Async login that completes when the RTL app is ready or times out.
     /// - Parameter token: JWT token from host app's auth system
-    /// - Returns: `true` if login succeeded (userAuth received), `false` if failed/timed out
+    /// - Returns: Result containing success state or a snake_case error code
     @MainActor
-    public func login(token: String) async -> Bool {
+    public func login(token: String) async -> RTLExperienceResult {
         guard let webView = webView else {
             print("[RTLSdk] Error: WebView not created. Call createWebView() first.")
-            return false
+            return .failure(.webview_not_created)
         }
 
         // Cancel any existing login attempt
@@ -133,7 +160,7 @@ public final class RTLSdk {
         let url = buildTokenForwardUrl(token: token)
         guard let url = url else {
             print("[RTLSdk] Error: Failed to build token forward URL")
-            return false
+            return .failure(.invalid_token_forward_url)
         }
 
         webView.load(url: url)
@@ -146,7 +173,7 @@ public final class RTLSdk {
                 try? await Task.sleep(nanoseconds: UInt64(loginTimeout * 1_000_000_000))
                 if !Task.isCancelled {
                     await MainActor.run {
-                        self.completeLogin(success: false)
+                        self.completeLogin(result: .failure(.login_timeout))
                     }
                 }
             }
@@ -394,13 +421,15 @@ public final class RTLSdk {
     internal func handleUserAuthReceived(accessToken: String, refreshToken: String) {
         _isLoggedIn = true
         lastTokenTimestamp = Date()
+        webView?.isHidden = false
         delegate?.onAuthenticated(accessToken: accessToken, refreshToken: refreshToken)
-        completeLogin(success: true)
+        completeLogin(result: .success)
     }
 
     /// Called internally when userLogout message is received
     internal func handleUserLogoutReceived() {
         _isLoggedIn = false
+        webView?.isHidden = true
         delegate?.onLogout()
     }
 
@@ -408,7 +437,9 @@ public final class RTLSdk {
     internal func handleAppReady() {
         print("[RTLSdk] Received appReady from webview")
         webviewIsReady = true
+        webView?.isHidden = false
         delegate?.onReady()
+        completeLogin(result: .success)
 
         // Send current location permission status to webview now that it's ready
         if locationFeaturesEnabled {
@@ -466,14 +497,14 @@ public final class RTLSdk {
     private func cancelPendingLogin() {
         loginTimeoutTask?.cancel()
         loginTimeoutTask = nil
-        loginContinuation?.resume(returning: false)
+        loginContinuation?.resume(returning: .failure(.request_cancelled))
         loginContinuation = nil
     }
 
-    private func completeLogin(success: Bool) {
+    private func completeLogin(result: RTLExperienceResult) {
         loginTimeoutTask?.cancel()
         loginTimeoutTask = nil
-        loginContinuation?.resume(returning: success)
+        loginContinuation?.resume(returning: result)
         loginContinuation = nil
     }
 
@@ -537,6 +568,14 @@ public final class RTLSdk {
             return
         }
         print("[RTLSdk] Token expired, requesting fresh token...")
-        _ = await requestTokenAndLogin()
+        _ = await presentExperience()
+    }
+}
+
+private extension RTLExperienceResult {
+    static let success = RTLExperienceResult(success: true)
+
+    static func failure(_ error: RTLExperienceError) -> RTLExperienceResult {
+        RTLExperienceResult(success: false, errorCode: error.rawValue)
     }
 }
