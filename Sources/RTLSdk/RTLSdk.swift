@@ -136,19 +136,21 @@ public final class RTLSdk {
     /// Request token from delegate and perform login.
     /// Called on initial webview show and when token expires.
     @MainActor
-    public func presentExperience() async -> RTLExperienceResult {
+    public func presentExperience(eventId: String? = nil) async -> RTLExperienceResult {
         guard let token = await delegate?.onNeedsToken() else {
             print("[RTLSdk] Token requested but delegate returned nil")
             return .failure(.token_unavailable)
         }
-        return await login(token: token)
+        return await login(token: token, eventId: eventId)
     }
 
     /// Async login that completes when the RTL app is ready or times out.
-    /// - Parameter token: JWT token from host app's auth system
+    /// - Parameters:
+    ///   - token: JWT token from host app's auth system
+    ///   - eventId: Optional event identifier from a host-app deep link
     /// - Returns: Result containing success state or a snake_case error code
     @MainActor
-    public func login(token: String) async -> RTLExperienceResult {
+    public func login(token: String, eventId: String? = nil) async -> RTLExperienceResult {
         guard let webView = webView else {
             print("[RTLSdk] Error: WebView not created. Call createWebView() first.")
             return .failure(.webview_not_created)
@@ -157,7 +159,7 @@ public final class RTLSdk {
         // Cancel any existing login attempt
         cancelPendingLogin()
 
-        let url = buildTokenForwardUrl(token: token)
+        let url = buildTokenForwardUrl(token: token, eventId: eventId)
         guard let url = url else {
             print("[RTLSdk] Error: Failed to build token forward URL")
             return .failure(.invalid_token_forward_url)
@@ -508,7 +510,7 @@ public final class RTLSdk {
         loginContinuation = nil
     }
 
-    private func buildTokenForwardUrl(token: String) -> URL? {
+    private func buildTokenForwardUrl(token: String, eventId: String?) -> URL? {
         guard let program = program, let environment = environment, let urlScheme = urlScheme else {
             return nil
         }
@@ -531,6 +533,10 @@ public final class RTLSdk {
             URLQueryItem(name: "embeddedProgramId", value: program),
             URLQueryItem(name: "appScheme", value: urlScheme)
         ]
+
+        if let eventId, !eventId.isEmpty {
+            components.queryItems?.append(URLQueryItem(name: "eventId", value: eventId))
+        }
 
         return components.url
     }
