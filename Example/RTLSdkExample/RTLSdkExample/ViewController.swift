@@ -6,7 +6,6 @@ class ViewController: UIViewController {
     private var rtlWebView: RTLWebView?
     private let statusLabel = UILabel()
     private let loginButton = UIButton(type: .system)
-    private var webViewTopConstraint: NSLayoutConstraint?
 
     // Test token - in a real app, this would come from your authentication system
     private let testToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiMmIwMzBhMzYtYWQyMS0xMjIyLTEyMzItYzViZjg5OGQxN2IxIiwiZ2VuZGVyIjoiRmVtYWxlIiwiZmlyc3ROYW1lIjoiRXJpY2thIiwibGFzdE5hbWUiOiJOIiwiZW1haWwiOiJsZXZvbmFsdkBnZXRib29uLmNvbSJ9LCJvcmdJZCI6ImNrcDluM2Q4eTAwNjNrc3V2Y2hjNndmZ3QiLCJjaGFwdGVySWQiOiJjMzIwNDdiNC01ZDk5LTQ1MDUtYjczMy03MWYxZmRlNGU1NzAiLCJwb2ludHNQZXJEb2xsYXIiOjIwMCwiaWF0IjoxNzU0MzA3MDg0LCJleHAiOjE4NDkwMzMwMDJ9.3yTQC0bEeiogdHd4qM_Wh8bRnY_aQ9F9ngk5QUF_CF8"
@@ -51,16 +50,14 @@ class ViewController: UIViewController {
         RTLSdk.shared.initialize(
             program: "crowdplay",
             environment: .staging,
-            urlScheme: "rtlsdkexample"
+            urlScheme: "rtlsdkexample",
+            delegate: self,
+            externalChapterId: "c32047b4-5d99-4505-b733-71f1fde4e570"
         )
 
-        // Set delegate
-        RTLSdk.shared.delegate = self
-
-        // Create webview (hidden until login)
+        // Create webview (the SDK manages its visibility)
         let webView = RTLSdk.shared.createWebView()
         webView.translatesAutoresizingMaskIntoConstraints = false
-        webView.isHidden = true
         view.addSubview(webView)
 
         // Full screen constraints
@@ -79,26 +76,26 @@ class ViewController: UIViewController {
         statusLabel.text = "Logging in..."
 
         Task {
-            _ = await RTLSdk.shared.requestTokenAndLogin()
+            let result = await RTLSdk.shared.presentExperience()
 
             await MainActor.run {
-                // Show full screen webview regardless of login result
-                // (web app handles its own auth state)
-                showFullScreenWebView()
+                if result.success {
+                    statusLabel.isHidden = true
+                    loginButton.isHidden = true
+
+                    // Enable location features (SDK handles permissions internally)
+                    RTLSdk.shared.enableLocationFeatures()
+
+                    #if DEBUG
+                    // Reset notification history for testing geofence notifications
+                    RTLSdk.shared.resetNotificationHistory()
+                    #endif
+                } else {
+                    statusLabel.text = "Failed to load RTL experience (\(result.errorCode ?? "unknown_error"))"
+                    loginButton.isEnabled = true
+                }
             }
         }
-    }
-
-    private func showFullScreenWebView() {
-        // Hide login UI
-        statusLabel.isHidden = true
-        loginButton.isHidden = true
-
-        // Show webview full screen
-        rtlWebView?.isHidden = false
-
-        // Hide navigation bar for true full screen
-        navigationController?.setNavigationBarHidden(true, animated: true)
     }
 }
 
@@ -106,33 +103,39 @@ class ViewController: UIViewController {
 
 extension ViewController: RTLSdkDelegate {
 
-    func rtlSdkDidAuthenticate(accessToken: String, refreshToken: String) {
+    func onAuthenticated(accessToken: String, refreshToken: String) {
         print("Authenticated! Access token: \(accessToken.prefix(20))...")
     }
 
-    func rtlSdkDidLogout() {
+    func onLogout() {
         print("User logged out")
-        // Show login UI again
-        rtlWebView?.isHidden = true
         statusLabel.isHidden = false
         statusLabel.text = "Session ended. Tap Login to continue"
         loginButton.isHidden = false
         loginButton.isEnabled = true
-        navigationController?.setNavigationBarHidden(false, animated: true)
     }
 
-    func rtlSdkRequestsOpenUrl(url: URL, forceExternal: Bool) {
-        print("Open URL requested: \(url), forceExternal: \(forceExternal)")
-        UIApplication.shared.open(url)
+    func onOpenUrl(url: URL, forceExternal: Bool) {
+        print("URL opened: \(url), forceExternal: \(forceExternal)")
+        // URL is already opened by SDK - this callback is informational
     }
 
-    func rtlSdkDidBecomeReady() {
+    func onReady() {
         print("RTL app is ready")
     }
 
-    func rtlSdkNeedsToken() async -> String? {
+    func onNeedsToken() async -> String? {
         print("SDK requesting token...")
         // In a real app, call your auth service here
         return testToken
+    }
+
+    // Optional location callbacks
+    func onLocationPermissionChange(granted: Bool) {
+        print("Location permission changed: \(granted)")
+    }
+
+    func onGeofenceEnter(store: RTLStore) {
+        print("Entered geofence for store: \(store.name)")
     }
 }
