@@ -3,7 +3,6 @@ import RTLSdk
 
 class ViewController: UIViewController {
 
-    private var rtlWebView: RTLWebView?
     private let statusLabel = UILabel()
     private let loginButton = UIButton(type: .system)
 
@@ -68,15 +67,25 @@ class ViewController: UIViewController {
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
-        self.rtlWebView = webView
     }
 
     @objc private func loginTapped() {
+        presentRTLExperience(statusMessage: "Logging in...")
+    }
+
+    func presentRTLExperience(
+        rtlEventId: String? = nil,
+        rtlRedirectUrl: String? = nil,
+        statusMessage: String = "Opening RTL experience..."
+    ) {
         loginButton.isEnabled = false
-        statusLabel.text = "Logging in..."
+        statusLabel.text = statusMessage
 
         Task {
-            let result = await RTLSdk.shared.presentExperience()
+            let result = await RTLSdk.shared.presentExperience(
+                rtlEventId: rtlEventId,
+                rtlRedirectUrl: rtlRedirectUrl
+            )
 
             await MainActor.run {
                 if result.success {
@@ -102,11 +111,6 @@ class ViewController: UIViewController {
 // MARK: - RTLSdkDelegate
 
 extension ViewController: RTLSdkDelegate {
-
-    func onAuthenticated(accessToken: String, refreshToken: String) {
-        print("Authenticated! Access token: \(accessToken.prefix(20))...")
-    }
-
     func onLogout() {
         print("User logged out")
         statusLabel.isHidden = false
