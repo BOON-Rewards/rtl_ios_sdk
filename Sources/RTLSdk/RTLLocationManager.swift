@@ -20,8 +20,13 @@ class RTLLocationManager: NSObject, CLLocationManagerDelegate {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         locationManager.distanceFilter = 100 // Update every 100 meters
-        locationManager.allowsBackgroundLocationUpdates = true
-        locationManager.pausesLocationUpdatesAutomatically = false
+
+        if Self.appSupportsBackgroundLocation {
+            locationManager.allowsBackgroundLocationUpdates = true
+            locationManager.pausesLocationUpdatesAutomatically = false
+        } else {
+            print("[RTLSdk] ⚠️ Background location mode is not enabled. Add UIBackgroundModes/location to Info.plist before enabling background location features.")
+        }
 
         // Enable debug mode when running from Xcode (DEBUG builds)
         #if DEBUG
@@ -53,6 +58,13 @@ class RTLLocationManager: NSObject, CLLocationManagerDelegate {
     /// Current location if available
     var currentLocation: CLLocation? {
         locationManager.location
+    }
+
+    private static var appSupportsBackgroundLocation: Bool {
+        guard let backgroundModes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] else {
+            return false
+        }
+        return backgroundModes.contains("location")
     }
 
     /// Request always (background) authorization

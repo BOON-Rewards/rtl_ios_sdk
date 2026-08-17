@@ -192,8 +192,15 @@ extension RTLWebView: WKNavigationDelegate {
 
         // Check for allowed domains
         let host = url.host ?? ""
-        let isAllowedDomain = host.contains("getboon.com") ||
+        var isAllowedDomain = host.contains("getboon.com") ||
                               host.contains("affinaloyalty.com")
+
+        #if DEBUG
+        isAllowedDomain = isAllowedDomain ||
+                          host == "localhost" ||
+                          host == "127.0.0.1" ||
+                          host == "::1"
+        #endif
 
         if isAllowedDomain {
             decisionHandler(.allow)

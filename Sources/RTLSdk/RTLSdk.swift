@@ -33,6 +33,7 @@ public final class RTLSdk {
     private var program: String?
     private var environment: RTLEnvironment?
     private var urlScheme: String?
+    private var tokenForwardBaseURL: URL?
     private var externalChapterId: String?
     private var isInitialized = false
 
@@ -86,21 +87,24 @@ public final class RTLSdk {
     /// Initialize the SDK with configuration and delegate.
     /// - Parameters:
     ///   - program: The program identifier (e.g., "crowdplay")
-    ///   - environment: The target environment (.staging or .production)
+    ///   - environment: The target environment (.development, .staging, or .production)
     ///   - urlScheme: The app's URL scheme for deep linking
     ///   - delegate: Delegate for receiving SDK events
+    ///   - tokenForwardBaseURL: Optional base URL for token-forward requests, useful for local development
     ///   - externalChapterId: The external chapter ID for location-based features (optional)
     public func initialize(
         program: String,
         environment: RTLEnvironment,
         urlScheme: String,
         delegate: RTLSdkDelegate?,
+        tokenForwardBaseURL: URL? = nil,
         externalChapterId: String? = nil
     ) {
         self.program = program
         self.environment = environment
         self.urlScheme = urlScheme
         self.delegate = delegate
+        self.tokenForwardBaseURL = tokenForwardBaseURL
         self.externalChapterId = externalChapterId
         self.isInitialized = true
         self._isLoggedIn = false
@@ -535,17 +539,25 @@ public final class RTLSdk {
             return nil
         }
 
-        let domain: String
-        switch environment {
-        case .staging:
-            domain = "\(program).staging.getboon.com"
-        case .production:
-            domain = "\(program).prod.getboon.com"
-        }
+        var components: URLComponents
+        if let tokenForwardBaseURL,
+           let baseComponents = URLComponents(url: tokenForwardBaseURL, resolvingAgainstBaseURL: false) {
+            components = baseComponents
+        } else {
+            let domain: String
+            switch environment {
+            case .development:
+                domain = "\(program)-dev.staging.getboon.com"
+            case .staging:
+                domain = "\(program).staging.getboon.com"
+            case .production:
+                domain = "\(program).prod.getboon.com"
+            }
 
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = domain
+            components = URLComponents()
+            components.scheme = "https"
+            components.host = domain
+        }
         components.path = "/auth/token-forward"
         components.queryItems = [
             URLQueryItem(name: "token", value: token),
