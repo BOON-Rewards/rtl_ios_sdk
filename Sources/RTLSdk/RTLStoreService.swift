@@ -17,6 +17,8 @@ class RTLStoreService {
     func fetchNearbyStores(latitude: Double, longitude: Double) async throws -> [RTLStore] {
         let domain: String
         switch environment {
+        case .development:
+            domain = "\(program)-dev.staging.getboon.com"
         case .staging:
             domain = "\(program).staging.getboon.com"
         case .production:
