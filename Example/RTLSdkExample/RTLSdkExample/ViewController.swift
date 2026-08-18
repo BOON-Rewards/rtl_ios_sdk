@@ -47,8 +47,7 @@ class ViewController: UIViewController {
     private func initializeSDK() {
         // Initialize the SDK
         RTLSdk.shared.initialize(
-            program: "crowdplay",
-            environment: .staging,
+            baseURL: URL(string: "https://client-provided-url.example")!,
             urlScheme: "rtlsdkexample",
             delegate: self,
             externalChapterId: "c32047b4-5d99-4505-b733-71f1fde4e570"

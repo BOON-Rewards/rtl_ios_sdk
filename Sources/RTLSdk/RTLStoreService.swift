@@ -2,35 +2,31 @@ import Foundation
 
 /// Service for fetching nearby stores from the RTL API
 class RTLStoreService {
-    private let program: String
-    private let environment: RTLEnvironment
+    private let baseURL: URL
     private let externalChapterId: String?
     private let apiKey = "2F7ZqPuvDr0LBtjqJQpNJKWA8FqkKAbJ"
 
-    init(program: String, environment: RTLEnvironment, externalChapterId: String?) {
-        self.program = program
-        self.environment = environment
+    init(baseURL: URL, externalChapterId: String?) {
+        self.baseURL = baseURL
         self.externalChapterId = externalChapterId
     }
 
     /// Fetch stores near the given coordinates
     func fetchNearbyStores(latitude: Double, longitude: Double) async throws -> [RTLStore] {
-        let domain: String
-        switch environment {
-        case .development:
-            domain = "\(program)-dev.staging.getboon.com"
-        case .staging:
-            domain = "\(program).staging.getboon.com"
-        case .production:
-            domain = "\(program).prod.getboon.com"
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            throw RTLStoreServiceError.invalidURL
         }
-
-        var urlString = "https://\(domain)/api/rest/cp/stores/nearby?lat=\(latitude)&long=\(longitude)"
+        components.path = "/api/rest/cp/stores/nearby"
+        components.fragment = nil
+        components.queryItems = [
+            URLQueryItem(name: "lat", value: String(latitude)),
+            URLQueryItem(name: "long", value: String(longitude))
+        ]
         if let chapterId = externalChapterId {
-            urlString += "&externalChapterId=\(chapterId)"
+            components.queryItems?.append(URLQueryItem(name: "externalChapterId", value: chapterId))
         }
 
-        guard let url = URL(string: urlString) else {
+        guard let url = components.url else {
             throw RTLStoreServiceError.invalidURL
         }
 
