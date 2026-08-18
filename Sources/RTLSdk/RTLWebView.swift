@@ -190,19 +190,7 @@ extension RTLWebView: WKNavigationDelegate {
             return
         }
 
-        // Check for allowed domains
-        let host = url.host ?? ""
-        var isAllowedDomain = host.contains("getboon.com") ||
-                              host.contains("affinaloyalty.com")
-
-        #if DEBUG
-        isAllowedDomain = isAllowedDomain ||
-                          host == "localhost" ||
-                          host == "127.0.0.1" ||
-                          host == "::1"
-        #endif
-
-        if isAllowedDomain {
+        if sdk?.isAllowedWebURL(url) == true {
             decisionHandler(.allow)
         } else {
             // External URL - notify delegate

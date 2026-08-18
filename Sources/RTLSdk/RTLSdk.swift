@@ -30,10 +30,8 @@ public final class RTLSdk {
 
     // MARK: - Configuration
 
-    private var program: String?
-    private var environment: RTLEnvironment?
+    private var baseURL: URL?
     private var urlScheme: String?
-    private var tokenForwardBaseURL: URL?
     private var externalChapterId: String?
     private var isInitialized = false
 
@@ -86,25 +84,19 @@ public final class RTLSdk {
 
     /// Initialize the SDK with configuration and delegate.
     /// - Parameters:
-    ///   - program: The program identifier (e.g., "crowdplay")
-    ///   - environment: The target environment (.development, .staging, or .production)
+    ///   - baseURL: The complete HTTP(S) base URL supplied for this client
     ///   - urlScheme: The app's URL scheme for deep linking
     ///   - delegate: Delegate for receiving SDK events
-    ///   - tokenForwardBaseURL: Optional base URL for token-forward requests, useful for local development
     ///   - externalChapterId: The external chapter ID for location-based features (optional)
     public func initialize(
-        program: String,
-        environment: RTLEnvironment,
+        baseURL: URL,
         urlScheme: String,
         delegate: RTLSdkDelegate?,
-        tokenForwardBaseURL: URL? = nil,
         externalChapterId: String? = nil
     ) {
-        self.program = program
-        self.environment = environment
+        self.baseURL = baseURL
         self.urlScheme = urlScheme
         self.delegate = delegate
-        self.tokenForwardBaseURL = tokenForwardBaseURL
         self.externalChapterId = externalChapterId
         self.isInitialized = true
         self._isLoggedIn = false
@@ -213,7 +205,7 @@ public final class RTLSdk {
     /// Enable location-based notifications
     /// Requests location and notification permissions, sets up geofencing
     public func enableLocationFeatures() {
-        guard isInitialized, let program = program, let environment = environment else {
+        guard isInitialized, let baseURL = baseURL else {
             print("[RTLSdk] Cannot enable location features: SDK not initialized")
             return
         }
@@ -227,7 +219,7 @@ public final class RTLSdk {
         locationFeaturesEnabled = true
 
         // Initialize managers
-        storeService = RTLStoreService(program: program, environment: environment, externalChapterId: externalChapterId)
+        storeService = RTLStoreService(baseURL: baseURL, externalChapterId: externalChapterId)
         notificationManager = RTLNotificationManager()
         geofenceManager = RTLGeofenceManager()
         locationManager = RTLLocationManager(sdk: self)
@@ -535,34 +527,19 @@ public final class RTLSdk {
         rtlEventId: String?,
         rtlRedirectUrl: String?
     ) -> URL? {
-        guard let program = program, let environment = environment, let urlScheme = urlScheme else {
+        guard let baseURL = baseURL, let urlScheme = urlScheme,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "https" || scheme == "http",
+              components.host != nil else {
             return nil
         }
 
-        var components: URLComponents
-        if let tokenForwardBaseURL,
-           let baseComponents = URLComponents(url: tokenForwardBaseURL, resolvingAgainstBaseURL: false) {
-            components = baseComponents
-        } else {
-            let domain: String
-            switch environment {
-            case .development:
-                domain = "\(program)-dev.staging.getboon.com"
-            case .staging:
-                domain = "\(program).staging.getboon.com"
-            case .production:
-                domain = "\(program).prod.getboon.com"
-            }
-
-            components = URLComponents()
-            components.scheme = "https"
-            components.host = domain
-        }
         components.path = "/auth/token-forward"
+        components.fragment = nil
         components.queryItems = [
             URLQueryItem(name: "token", value: token),
             URLQueryItem(name: "isWrappedMobileApp", value: "true"),
-            URLQueryItem(name: "embeddedProgramId", value: program),
             URLQueryItem(name: "appScheme", value: urlScheme)
         ]
 
@@ -577,10 +554,30 @@ public final class RTLSdk {
         return components.url
     }
 
-    // MARK: - Configuration Accessors (Internal)
+    internal func isAllowedWebURL(_ url: URL) -> Bool {
+        guard let baseURL,
+              let configuredScheme = baseURL.scheme?.lowercased(),
+              let candidateScheme = url.scheme?.lowercased(),
+              let configuredHost = baseURL.host?.lowercased(),
+              let candidateHost = url.host?.lowercased() else {
+            return false
+        }
 
-    internal var currentProgram: String? { program }
-    internal var currentEnvironment: RTLEnvironment? { environment }
+        return configuredScheme == candidateScheme &&
+            configuredHost == candidateHost &&
+            effectivePort(for: baseURL) == effectivePort(for: url)
+    }
+
+    private func effectivePort(for url: URL) -> Int? {
+        if let port = url.port {
+            return port
+        }
+        switch url.scheme?.lowercased() {
+        case "http": return 80
+        case "https": return 443
+        default: return nil
+        }
+    }
 
     // MARK: - App Lifecycle
 
