@@ -9,6 +9,17 @@ public class RTLWebView: UIView {
     private let webView: WKWebView
     private weak var sdk: RTLSdk?
     private let messageHandler: RTLMessageHandler
+    private let hapticEngine: RTLHapticEngine
+    private let refreshControl = UIRefreshControl()
+    private var backgroundObserver: NSObjectProtocol?
+
+    public override var isHidden: Bool {
+        didSet {
+            if isHidden {
+                hapticEngine.stop()
+            }
+        }
+    }
 
     // MARK: - Initialization
 
@@ -17,6 +28,7 @@ public class RTLWebView: UIView {
     init(sdk: RTLSdk) {
         self.sdk = sdk
         self.messageHandler = RTLMessageHandler()
+        self.hapticEngine = RTLHapticEngine()
 
         // Configure WKWebView
         let configuration = WKWebViewConfiguration()
@@ -24,6 +36,16 @@ public class RTLWebView: UIView {
 
         // Add message handler for JavaScript bridge
         contentController.add(messageHandler, name: RTLMessageHandler.handlerName)
+
+        let hapticCapabilities = hapticEngine.capabilities
+        print("[RTLSdk][Haptics] Initializing with capabilities: \(hapticCapabilities)")
+        if let capabilityScript = RTLWebView.capabilityInjectionScript(haptics: hapticCapabilities) {
+            contentController.addUserScript(WKUserScript(
+                source: capabilityScript,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            ))
+        }
 
         // Add console log capture script
         let consoleLogScript = WKUserScript(
@@ -44,6 +66,13 @@ public class RTLWebView: UIView {
 
         messageHandler.delegate = self
         setupWebView()
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.hapticEngine.stop()
+        }
     }
 
     private static var consoleLogOverrideScript: String {
@@ -72,13 +101,45 @@ public class RTLWebView: UIView {
         """
     }
 
+    static func capabilityInjectionScript(haptics: [String: Any]) -> String? {
+        let capabilities: [String: Any] = ["haptics": haptics]
+        guard let data = try? JSONSerialization.data(withJSONObject: capabilities),
+              let json = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return """
+        (function() {
+            var capabilities = \(json);
+            Object.freeze(capabilities.haptics);
+            Object.freeze(capabilities);
+            // NativeAppCapabilities is the public contract consumed by the web app.
+            // Keep the original name as an alias for older wrapper integrations.
+            window.NativeAppCapabilities = capabilities;
+            window.rtlNativeCapabilities = capabilities;
+            window.dispatchEvent(new CustomEvent('NativeAppCapabilitiesReady', { detail: capabilities }));
+            window.dispatchEvent(new CustomEvent('rtlNativeCapabilitiesReady', { detail: capabilities }));
+        })();
+        """
+    }
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented. Use RTLSdk.shared.createWebView() instead.")
     }
 
     deinit {
+        hapticEngine.stop()
+        if let backgroundObserver {
+            NotificationCenter.default.removeObserver(backgroundObserver)
+        }
         webView.configuration.userContentController.removeScriptMessageHandler(forName: RTLMessageHandler.handlerName)
         webView.configuration.userContentController.removeScriptMessageHandler(forName: RTLWebView.consoleLogHandler)
+    }
+
+    public override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            hapticEngine.stop()
+        }
     }
 
     // MARK: - Setup
@@ -87,6 +148,10 @@ public class RTLWebView: UIView {
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = self
         webView.scrollView.bounces = true
+        refreshControl.accessibilityLabel = "Refresh"
+        refreshControl.tintColor = UIColor(white: 0.93, alpha: 1.0)
+        refreshControl.addTarget(self, action: #selector(handlePullToRefresh), for: .valueChanged)
+        webView.scrollView.refreshControl = refreshControl
 
         // Enable inspection in debug builds
         #if DEBUG
@@ -106,6 +171,20 @@ public class RTLWebView: UIView {
     }
 
     // MARK: - Public Methods
+
+    @objc private func handlePullToRefresh() {
+        guard let currentURL = webView.url,
+              currentURL.absoluteString != "about:blank" else {
+            refreshControl.endRefreshing()
+            return
+        }
+
+        webView.reload()
+    }
+
+    private func finishPullToRefresh() {
+        refreshControl.endRefreshing()
+    }
 
     /// Pre-warm the webview by loading a blank page
     /// This initializes WKWebView's web processes in the background,
@@ -200,11 +279,24 @@ extension RTLWebView: WKNavigationDelegate {
     }
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        finishPullToRefresh()
         print("[RTLSdk] WebView finished loading: \(webView.url?.absoluteString ?? "unknown")")
     }
 
     public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        finishPullToRefresh()
         print("[RTLSdk] WebView navigation failed: \(error.localizedDescription)")
+    }
+
+    public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        finishPullToRefresh()
+        print("[RTLSdk] WebView provisional navigation failed: \(error.localizedDescription)")
+    }
+
+    public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        finishPullToRefresh()
+        hapticEngine.stop()
+        print("[RTLSdk] WebView content process terminated")
     }
 }
 
@@ -230,6 +322,10 @@ extension RTLWebView: RTLMessageHandlerDelegate {
 
     func messageHandler(_ handler: RTLMessageHandler, didRequestLocationPermission: Void) {
         sdk?.handleLocationPermissionRequest()
+    }
+
+    func messageHandler(_ handler: RTLMessageHandler, didRequestHapticPattern pattern: RTLHapticPattern) {
+        hapticEngine.play(pattern)
     }
 }
 

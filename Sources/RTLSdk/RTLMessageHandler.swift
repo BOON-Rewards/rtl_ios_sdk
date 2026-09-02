@@ -8,6 +8,7 @@ protocol RTLMessageHandlerDelegate: AnyObject {
     func messageHandler(_ handler: RTLMessageHandler, didReceiveAppReady: Void)
     func messageHandler(_ handler: RTLMessageHandler, didRequestOpenUrl url: URL, forceExternal: Bool)
     func messageHandler(_ handler: RTLMessageHandler, didRequestLocationPermission: Void)
+    func messageHandler(_ handler: RTLMessageHandler, didRequestHapticPattern pattern: RTLHapticPattern)
 }
 
 /// Handles JavaScript messages from the RTL web app
@@ -27,12 +28,13 @@ final class RTLMessageHandler: NSObject, WKScriptMessageHandler {
         case locationPermissionRequest
         case locationPermissionStatus
         case locationUpdate
+        case hapticPlay = "haptic.play"
     }
 
     // MARK: - WKScriptMessageHandler
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.name == RTLMessageHandler.handlerName else { return }
+        guard message.name == RTLMessageHandler.handlerName, message.frameInfo.isMainFrame else { return }
 
         // Parse the message body
         guard let body = message.body as? String else {
@@ -72,6 +74,9 @@ final class RTLMessageHandler: NSObject, WKScriptMessageHandler {
 
         case .locationPermissionRequest:
             delegate?.messageHandler(self, didRequestLocationPermission: ())
+
+        case .hapticPlay:
+            handleHapticPlay(json)
 
         case .locationPermissionStatus, .locationUpdate:
             // These are outgoing messages, not expected from web
@@ -113,5 +118,15 @@ final class RTLMessageHandler: NSObject, WKScriptMessageHandler {
         }
 
         delegate?.messageHandler(self, didReceiveUserAuth: accessToken, refreshToken: refreshToken)
+    }
+
+    private func handleHapticPlay(_ json: [String: Any]) {
+        do {
+            guard let pattern = try RTLHapticBridgeMessage.hapticPattern(from: json) else { return }
+            print("[RTLSdk][Haptics] Accepted haptic.play v\(pattern.version) with \(pattern.events.count) event(s)")
+            delegate?.messageHandler(self, didRequestHapticPattern: pattern)
+        } catch {
+            print("[RTLSdk][Haptics] Rejected haptic.play message: \(error)")
+        }
     }
 }

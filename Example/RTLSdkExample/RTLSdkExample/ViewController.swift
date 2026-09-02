@@ -110,6 +110,10 @@ class ViewController: UIViewController {
 // MARK: - RTLSdkDelegate
 
 extension ViewController: RTLSdkDelegate {
+    @objc func onAuthenticated(accessToken: String, refreshToken: String) {
+        print("User authenticated")
+    }
+
     func onLogout() {
         print("User logged out")
         statusLabel.isHidden = false
