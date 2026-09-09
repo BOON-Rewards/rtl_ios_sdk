@@ -165,10 +165,3 @@ struct RTLHapticPattern {
         return doubleValue
     }
 }
-
-enum RTLHapticBridgeMessage {
-    static func hapticPattern(from message: [String: Any]) throws -> RTLHapticPattern? {
-        guard message["type"] as? String == "haptic.play" else { return nil }
-        return try RTLHapticPattern.parse(payload: message["payload"] as Any)
-    }
-}

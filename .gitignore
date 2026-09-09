@@ -75,4 +75,7 @@ playground.xcworkspace
 *.keystore
 *.env
 .env.*
-.idea
+.idea/
+
+### Local AI tooling ###
+.claude/settings.local.json
