@@ -8,7 +8,7 @@ public class RTLWebView: UIView {
 
     private let webView: WKWebView
     private weak var sdk: RTLSdk?
-    private let messageHandler: RTLMessageHandler
+    private let bridge: RTLBridge
     private let hapticEngine: RTLHapticEngine
     private let refreshControl = UIRefreshControl()
     private var backgroundObserver: NSObjectProtocol?
@@ -23,31 +23,26 @@ public class RTLWebView: UIView {
 
     // MARK: - Initialization
 
+    #if DEBUG
     private static let consoleLogHandler = "rtlConsoleLog"
+    #endif
 
     init(sdk: RTLSdk) {
         self.sdk = sdk
-        self.messageHandler = RTLMessageHandler()
-        self.hapticEngine = RTLHapticEngine()
+        let hapticEngine = RTLHapticEngine()
+        self.hapticEngine = hapticEngine
+        self.bridge = RTLBridge(sdk: sdk, hapticEngine: hapticEngine)
 
         // Configure WKWebView
         let configuration = WKWebViewConfiguration()
         let contentController = WKUserContentController()
 
         // Add message handler for JavaScript bridge
-        contentController.add(messageHandler, name: RTLMessageHandler.handlerName)
+        contentController.add(bridge, name: RTLBridge.name)
 
-        let hapticCapabilities = hapticEngine.capabilities
-        print("[RTLSdk][Haptics] Initializing with capabilities: \(hapticCapabilities)")
-        if let capabilityScript = RTLWebView.capabilityInjectionScript(haptics: hapticCapabilities) {
-            contentController.addUserScript(WKUserScript(
-                source: capabilityScript,
-                injectionTime: .atDocumentStart,
-                forMainFrameOnly: true
-            ))
-        }
-
-        // Add console log capture script
+        // Page console output can contain credentials or personal data. Keep
+        // this native debugging aid out of production SDK builds.
+        #if DEBUG
         let consoleLogScript = WKUserScript(
             source: RTLWebView.consoleLogOverrideScript,
             injectionTime: .atDocumentStart,
@@ -55,6 +50,7 @@ public class RTLWebView: UIView {
         )
         contentController.addUserScript(consoleLogScript)
         contentController.add(ConsoleLogHandler(), name: RTLWebView.consoleLogHandler)
+        #endif
 
         configuration.userContentController = contentController
         configuration.allowsInlineMediaPlayback = true
@@ -64,7 +60,7 @@ public class RTLWebView: UIView {
 
         super.init(frame: .zero)
 
-        messageHandler.delegate = self
+        bridge.attach(to: webView)
         setupWebView()
         backgroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
@@ -75,6 +71,7 @@ public class RTLWebView: UIView {
         }
     }
 
+    #if DEBUG
     private static var consoleLogOverrideScript: String {
         """
         (function() {
@@ -100,27 +97,7 @@ public class RTLWebView: UIView {
         })();
         """
     }
-
-    static func capabilityInjectionScript(haptics: [String: Any]) -> String? {
-        let capabilities: [String: Any] = ["haptics": haptics]
-        guard let data = try? JSONSerialization.data(withJSONObject: capabilities),
-              let json = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        return """
-        (function() {
-            var capabilities = \(json);
-            Object.freeze(capabilities.haptics);
-            Object.freeze(capabilities);
-            // NativeAppCapabilities is the public contract consumed by the web app.
-            // Keep the original name as an alias for older wrapper integrations.
-            window.NativeAppCapabilities = capabilities;
-            window.rtlNativeCapabilities = capabilities;
-            window.dispatchEvent(new CustomEvent('NativeAppCapabilitiesReady', { detail: capabilities }));
-            window.dispatchEvent(new CustomEvent('rtlNativeCapabilitiesReady', { detail: capabilities }));
-        })();
-        """
-    }
+    #endif
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented. Use RTLSdk.shared.createWebView() instead.")
@@ -131,8 +108,10 @@ public class RTLWebView: UIView {
         if let backgroundObserver {
             NotificationCenter.default.removeObserver(backgroundObserver)
         }
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: RTLMessageHandler.handlerName)
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: RTLBridge.name)
+        #if DEBUG
         webView.configuration.userContentController.removeScriptMessageHandler(forName: RTLWebView.consoleLogHandler)
+        #endif
     }
 
     public override func didMoveToWindow() {
@@ -147,6 +126,7 @@ public class RTLWebView: UIView {
     private func setupWebView() {
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = self
+        webView.uiDelegate = self
         webView.scrollView.bounces = true
         refreshControl.accessibilityLabel = "Refresh"
         refreshControl.tintColor = UIColor(white: 0.93, alpha: 1.0)
@@ -170,7 +150,7 @@ public class RTLWebView: UIView {
         ])
     }
 
-    // MARK: - Public Methods
+    // MARK: - SDK Methods
 
     @objc private func handlePullToRefresh() {
         guard let currentURL = webView.url,
@@ -186,68 +166,74 @@ public class RTLWebView: UIView {
         refreshControl.endRefreshing()
     }
 
-    /// Pre-warm the webview by loading a blank page
-    /// This initializes WKWebView's web processes in the background,
-    /// avoiding the 4-10 second delay when the actual content is loaded
-    public func prewarm() {
-        print("[RTLSdk] 🔥 Pre-warming webview...")
-        webView.loadHTMLString("<html><body></body></html>", baseURL: nil)
-    }
-
     /// Load a URL in the webview
     /// - Parameter url: The URL to load
-    public func load(url: URL) {
+    func load(url: URL) {
         let request = URLRequest(url: url)
         webView.load(request)
     }
 
-    /// Evaluate JavaScript in the webview
-    /// - Parameter script: The JavaScript to evaluate
-    public func evaluateJavaScript(_ script: String) {
-        webView.evaluateJavaScript(script) { _, error in
-            if let error = error {
-                print("[RTLSdk] JavaScript evaluation error: \(error.localizedDescription)")
+    /// Loads the unauthenticated sign-in page used by the bundled SDK examples.
+    /// Host integrations should use `RTLSdk.presentExperience(...)`.
+    @_spi(RTLExample)
+    public func loadLoginForExample(url: URL) {
+        load(url: url)
+    }
+
+    /// Returns the signed-in WebView session in HTTP header form for an SDK
+    /// request to the same host. The cookie stays inside native SDK networking;
+    /// it is never sent through the JavaScript bridge or exposed to the host.
+    func sessionCookieHeader(for url: URL) async -> String? {
+        let cookies = await withCheckedContinuation { continuation in
+            webView.configuration.websiteDataStore.httpCookieStore.getAllCookies {
+                continuation.resume(returning: $0)
             }
         }
+        let matching = cookies.filter {
+            $0.name == "token" && Self.cookie($0, appliesTo: url)
+        }
+        return HTTPCookie.requestHeaderFields(with: matching)["Cookie"]
+    }
+
+    private static func cookie(_ cookie: HTTPCookie, appliesTo url: URL) -> Bool {
+        guard let host = url.host?.lowercased() else { return false }
+        let domain = cookie.domain
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        let domainMatches = host == domain || host.hasSuffix(".\(domain)")
+        let cookiePath = cookie.path.isEmpty ? "/" : cookie.path
+        let pathMatches = url.path.isEmpty || url.path.hasPrefix(cookiePath)
+        let secureMatches = !cookie.isSecure || url.scheme?.lowercased() == "https"
+        return domainMatches && pathMatches && secureMatches
     }
 
     /// Reload the current page
-    public func reload() {
+    func reload() {
         webView.reload()
     }
 
     /// Go back in history
-    public func goBack() {
+    func goBack() {
         webView.goBack()
     }
 
     /// Go forward in history
-    public func goForward() {
+    func goForward() {
         webView.goForward()
     }
 
     /// Check if can go back
-    public var canGoBack: Bool {
+    var canGoBack: Bool {
         webView.canGoBack
     }
 
     /// Check if can go forward
-    public var canGoForward: Bool {
+    var canGoForward: Bool {
         webView.canGoForward
     }
 
-    /// Post a message to the web content
-    /// - Parameter message: Dictionary to send as JSON via window.postMessage
-    public func postMessage(_ message: [String: Any]) {
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: message),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            print("[RTLSdk] Failed to serialize message to JSON")
-            return
-        }
-
-        print("[RTLSdk] 📤 Posting message to webview: \(jsonString)")
-        let script = "window.postMessage(\(jsonString), '*')"
-        evaluateJavaScript(script)
+    func sendToWeb(_ type: RTLNativeMessageType, fields: [String: Any] = [:]) {
+        bridge.sendToWeb(type, fields: fields)
     }
 }
 
@@ -271,66 +257,81 @@ extension RTLWebView: WKNavigationDelegate {
 
         if sdk?.isAllowedWebURL(url) == true {
             decisionHandler(.allow)
-        } else {
-            // External URL - notify delegate
-            sdk?.handleOpenUrl(url: url, forceExternal: true)
-            decisionHandler(.cancel)
+            return
+        }
+
+        // Anything off our host is refused here and opened in the overlay
+        // instead. This web view holds the session cookie, so a third-party
+        // page has no business loading in it - and the overlay is browser-owned
+        // and unreadable by this app, which is where such a page belongs.
+        //
+        // This is also how flows that navigate on their own terms are caught.
+        // Open banking's providers redirect the page rather than asking the
+        // bridge to open anything, so there is nothing to intercept except the
+        // navigation itself.
+        RTLLog.info(.webView, "Navigation to \(url.host ?? "another host") captured into the overlay")
+        sdk?.handleOpenUrl(url: url, surface: .overlay)
+        decisionHandler(.cancel)
+    }
+
+    public func webView(
+        _ webView: WKWebView,
+        didStartProvisionalNavigation navigation: WKNavigation!
+    ) {
+        // The clock starts here rather than at load(url:), so it measures what
+        // the user waits for rather than how promptly we asked. A nil or blank
+        // URL is not a real open, so it is skipped (Android does the same).
+        if let current = webView.url?.absoluteString, current != "about:blank" {
+            sdk?.noteOpenStarted()
         }
     }
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         finishPullToRefresh()
-        print("[RTLSdk] WebView finished loading: \(webView.url?.absoluteString ?? "unknown")")
+        RTLLog.debug(.webView, "WebView finished loading: \(RTLLog.url(webView.url?.absoluteString ?? "unknown"))")
     }
 
     public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         finishPullToRefresh()
-        print("[RTLSdk] WebView navigation failed: \(error.localizedDescription)")
+        RTLLog.error(.webView, "WebView navigation failed: \(error.localizedDescription)")
     }
 
     public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         finishPullToRefresh()
-        print("[RTLSdk] WebView provisional navigation failed: \(error.localizedDescription)")
+        RTLLog.error(.webView, "WebView provisional navigation failed: \(error.localizedDescription)")
     }
 
     public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         finishPullToRefresh()
         hapticEngine.stop()
-        print("[RTLSdk] WebView content process terminated")
+        RTLLog.debug(.webView, "WebView content process terminated")
     }
 }
 
-// MARK: - RTLMessageHandlerDelegate
-
-extension RTLWebView: RTLMessageHandlerDelegate {
-
-    func messageHandler(_ handler: RTLMessageHandler, didReceiveUserAuth accessToken: String, refreshToken: String) {
-        sdk?.handleUserAuthReceived(accessToken: accessToken, refreshToken: refreshToken)
-    }
-
-    func messageHandler(_ handler: RTLMessageHandler, didReceiveUserLogout: Void) {
-        sdk?.handleUserLogoutReceived()
-    }
-
-    func messageHandler(_ handler: RTLMessageHandler, didReceiveAppReady: Void) {
-        sdk?.handleAppReady()
-    }
-
-    func messageHandler(_ handler: RTLMessageHandler, didRequestOpenUrl url: URL, forceExternal: Bool) {
-        sdk?.handleOpenUrl(url: url, forceExternal: forceExternal)
-    }
-
-    func messageHandler(_ handler: RTLMessageHandler, didRequestLocationPermission: Void) {
-        sdk?.handleLocationPermissionRequest()
-    }
-
-    func messageHandler(_ handler: RTLMessageHandler, didRequestHapticPattern pattern: RTLHapticPattern) {
-        hapticEngine.play(pattern)
+extension RTLWebView: WKUIDelegate {
+    /// `window.open` from the page.
+    ///
+    /// WKWebView drops these unless a UI delegate handles them, so a provider
+    /// SDK that opens a popup rather than navigating did nothing at all and
+    /// gave no clue why. Returning nil keeps the popup from being created; the
+    /// destination goes to the overlay instead, the same as a navigation.
+    public func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        if let url = navigationAction.request.url {
+            RTLLog.info(.webView, "window.open for \(url.host ?? "an unknown host") captured into the overlay")
+            sdk?.handleOpenUrl(url: url, surface: .overlay)
+        }
+        return nil
     }
 }
 
 // MARK: - Console Log Handler
 
+#if DEBUG
 private class ConsoleLogHandler: NSObject, WKScriptMessageHandler {
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any],
@@ -338,6 +339,18 @@ private class ConsoleLogHandler: NSObject, WKScriptMessageHandler {
               let logMessage = body["message"] as? String else {
             return
         }
-        print("[WebView \(level)] \(logMessage)")
+        // The page's own console level carries through, so a JS error reads as
+        // an error rather than being flattened into our debug stream.
+        switch level.lowercased() {
+        case "error":
+            RTLLog.error(.webView, logMessage)
+        case "warn", "warning":
+            RTLLog.warn(.webView, logMessage)
+        case "info":
+            RTLLog.info(.webView, logMessage)
+        default:
+            RTLLog.debug(.webView, logMessage)
+        }
     }
 }
+#endif

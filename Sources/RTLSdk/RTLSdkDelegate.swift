@@ -3,29 +3,21 @@ import Foundation
 /// Delegate protocol for receiving RTL SDK events
 @objc public protocol RTLSdkDelegate: AnyObject {
 
-    /// Called when user authentication succeeds
-    /// - Parameters:
-    ///   - accessToken: The access token from authentication
-    ///   - refreshToken: The refresh token from authentication
-    func onAuthenticated(accessToken: String, refreshToken: String)
-
-    /// Called when user logs out
-    func onLogout()
-
-    /// Called when the RTL web app opens a URL (informational)
-    /// URLs are handled automatically by the SDK
-    /// - Parameters:
-    ///   - url: The URL that was opened
-    ///   - forceExternal: If true, opened in external browser; otherwise in-app browser
-    func onOpenUrl(url: URL, forceExternal: Bool)
+    /// Called when the RTL experience starts or stops loading.
+    ///
+    /// The SDK sends `true` before requesting authentication and `false` when
+    /// the web app is ready or the attempt ends. Hosts can use this callback
+    /// for both the initial presentation and later session recovery. It is
+    /// always called on the main thread.
+    func onLoadingStateChanged(isLoading: Bool)
 
     /// Called when the RTL web app has finished loading and is ready
     func onReady()
 
-    /// Called when SDK needs a fresh token from the host app
-    /// This is called on initial webview load and when token expires after 20 hours
+    /// Provides a freshly signed JWT when the SDK establishes or renews authentication.
+    /// The host should fetch it from its backend and must not sign it in the app.
     /// - Returns: JWT token string, or nil if unavailable
-    func onNeedsToken() async -> String?
+    func provideAuthToken() async -> String?
 
     // MARK: - Location Callbacks (Optional)
 
@@ -41,14 +33,6 @@ import Foundation
 // MARK: - Default Implementations
 
 public extension RTLSdkDelegate {
-
-    func onAuthenticated(accessToken: String, refreshToken: String) {}
-
-    func onLogout() {}
-
-    func onOpenUrl(url: URL, forceExternal: Bool) {}
-
+    func onLoadingStateChanged(isLoading: Bool) {}
     func onReady() {}
-
-    func onNeedsToken() async -> String? { nil }
 }

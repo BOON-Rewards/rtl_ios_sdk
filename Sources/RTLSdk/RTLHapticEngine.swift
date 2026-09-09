@@ -19,11 +19,11 @@ final class RTLHapticEngine {
 
     func play(_ pattern: RTLHapticPattern) {
         guard !pattern.events.isEmpty else {
-            print("[RTLSdk][Haptics] Ignored empty pattern")
+            RTLLog.debug(.haptics, "Ignored empty pattern")
             return
         }
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
-            print("[RTLSdk][Haptics] Device does not support Core Haptics")
+            RTLLog.debug(.haptics, "Device does not support Core Haptics")
             return
         }
 
@@ -35,9 +35,9 @@ final class RTLHapticEngine {
             let player = try engine.makePlayer(with: hapticPattern)
             try player.start(atTime: CHHapticTimeImmediate)
             retain(player, for: pattern)
-            print("[RTLSdk][Haptics] Started pattern with \(events.count) event(s)")
+            RTLLog.debug(.haptics, "Started pattern with \(events.count) event(s)")
         } catch {
-            print("[RTLSdk][Haptics] Unable to play pattern: \(error.localizedDescription)")
+            RTLLog.error(.haptics, "Unable to play pattern: \(error.localizedDescription)")
         }
     }
 
@@ -56,14 +56,14 @@ final class RTLHapticEngine {
         let newEngine = try CHHapticEngine()
         newEngine.isAutoShutdownEnabled = true
         newEngine.stoppedHandler = { reason in
-            print("[RTLSdk] Haptic engine stopped (reason: \(reason.rawValue))")
+            RTLLog.debug(.haptics, "Haptic engine stopped (reason: \(reason.rawValue))")
         }
         newEngine.resetHandler = { [weak self, weak newEngine] in
             guard self?.engine === newEngine else { return }
             do {
                 try newEngine?.start()
             } catch {
-                print("[RTLSdk] Unable to restart haptic engine after reset: \(error.localizedDescription)")
+                RTLLog.error(.haptics, "Unable to restart haptic engine after reset: \(error.localizedDescription)")
             }
         }
         try newEngine.start()
