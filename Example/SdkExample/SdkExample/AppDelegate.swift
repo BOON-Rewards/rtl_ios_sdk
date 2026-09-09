@@ -1,12 +1,11 @@
 import UIKit
 import UserNotifications
+import RTLSdk
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
     var window: UIWindow?
-    private let appScheme = "rtlsdkexample"
-    private let rtlDeepLinkHost = "rtlsdk"
     private let rtlActionType = "rtlSdk"
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
@@ -16,13 +15,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         window?.makeKeyAndVisible()
         UNUserNotificationCenter.current().delegate = self
 
-        if let deepLinkUrl = launchOptions?[.url] as? URL,
-           let deepLinkContext = parseRTLDeepLink(from: deepLinkUrl) {
+        if let deepLinkURL = launchOptions?[.url] as? URL {
             viewController.loadViewIfNeeded()
-            viewController.presentRTLExperience(
-                rtlEventId: deepLinkContext.rtlEventId,
-                rtlRedirectUrl: deepLinkContext.rtlRedirectUrl
-            )
+            _ = RTLSdk.shared.handleDeepLink(deepLinkURL)
         }
 
         if let remoteNotification = launchOptions?[.remoteNotification] as? [AnyHashable: Any],
@@ -43,17 +38,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]
     ) -> Bool {
         guard let navigationController = window?.rootViewController as? UINavigationController,
-              let viewController = navigationController.viewControllers.first as? ViewController,
-              let deepLinkContext = parseRTLDeepLink(from: url) else {
+              let viewController = navigationController.viewControllers.first as? ViewController else {
             return false
         }
 
         viewController.loadViewIfNeeded()
-        viewController.presentRTLExperience(
-            rtlEventId: deepLinkContext.rtlEventId,
-            rtlRedirectUrl: deepLinkContext.rtlRedirectUrl
-        )
-        return true
+        return RTLSdk.shared.handleDeepLink(url)
     }
 
     func userNotificationCenter(
@@ -72,18 +62,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         }
 
         completionHandler()
-    }
-
-    private func parseRTLDeepLink(from url: URL) -> (rtlEventId: String?, rtlRedirectUrl: String?)? {
-        guard url.scheme?.lowercased() == appScheme,
-              url.host?.lowercased() == rtlDeepLinkHost else {
-            return nil
-        }
-
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        let rtlEventId = components?.queryItems?.first(where: { $0.name == "rtlEventId" })?.value
-        let rtlRedirectUrl = components?.queryItems?.first(where: { $0.name == "rtlRedirectUrl" })?.value
-        return (rtlEventId, rtlRedirectUrl)
     }
 
     private func parseRTLPushEventId(from userInfo: [AnyHashable: Any]) -> String? {
