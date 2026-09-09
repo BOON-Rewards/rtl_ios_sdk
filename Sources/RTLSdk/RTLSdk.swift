@@ -163,6 +163,7 @@ public final class RTLSdk {
         externalChapterId: String? = nil
     ) {
         cancelAuthentication()
+        webView?.invalidateDocument()
         webviewIsReady = false
         webView?.isHidden = true
         self.baseURL = baseURL
@@ -186,6 +187,8 @@ public final class RTLSdk {
         guard isInitialized else {
             fatalError("RTLSdk not initialized. Call initialize() first.")
         }
+        cancelAuthentication()
+        self.webView?.invalidateDocument()
         webviewIsReady = false
         let webView = makeView(self)
         webView.isHidden = true
@@ -223,13 +226,7 @@ public final class RTLSdk {
         rtlEventId: String? = nil,
         rtlRedirectUrl: String? = nil
     ) {
-        // Register ownership before asking the host for a token. A cancelled
-        // provider may still return, but can no longer navigate this WebView.
-        if let previous = activeAttempt {
-            finishAuthentication(previous, result: .failure(.request_cancelled), keepLoading: true)
-        }
-        activeAttempt = attempt
-        webviewIsReady = false
+        beginAuthentication(attempt)
         updateExperienceLoading(true)
         let tokenProvider = delegate
         attempt.tokenTask = Task { @MainActor [weak self] in
@@ -249,6 +246,7 @@ public final class RTLSdk {
                 self.finishAuthentication(attempt, result: .failure(.invalid_token_forward_url))
                 return
             }
+            webView.prepareAuthenticationDocument()
             attempt.awaitingWeb = true
             attempt.timeoutTask = Task { @MainActor [weak self] in
                 do {
@@ -263,6 +261,9 @@ public final class RTLSdk {
     /// Triggers logout in the webview
     public func logout() {
         cancelAuthentication()
+        webviewIsReady = false
+        webView?.isHidden = true
+        // An already loaded Consumer ends the server session and acknowledges logout.
         webView?.sendToWeb(.logoutRequested)
     }
 
@@ -541,6 +542,7 @@ public final class RTLSdk {
     /// Called internally when userLogout message is received
     internal func handleUserLogoutReceived() {
         cancelAuthentication()
+        webView?.invalidateDocument()
         webviewIsReady = false
         webView?.isHidden = true
     }
@@ -577,8 +579,36 @@ public final class RTLSdk {
         RTLLog.info(.core, "Open took \(milliseconds)ms from loadStart to appReady")
     }
 
+    internal func isCurrentWebView(_ view: RTLWebView) -> Bool { webView === view }
+
+    private func beginAuthentication(_ attempt: AuthenticationAttempt) {
+        // Register ownership before asking the host for a token. A cancelled
+        // provider may still return, but can no longer navigate this WebView.
+        if let previous = activeAttempt {
+            finishAuthentication(previous, result: .failure(.request_cancelled), keepLoading: true)
+        }
+        activeAttempt = attempt
+        webView?.invalidateDocument()
+        webviewIsReady = false
+    }
+
+    internal func beginExampleLogin(in view: RTLWebView) {
+        guard isCurrentWebView(view) else { return }
+        let attempt = AuthenticationAttempt()
+        attempt.awaitingWeb = true
+        beginAuthentication(attempt)
+        // Interactive sign-in must stay visible: appReady arrives only after
+        // the user signs in. A host loader here would cover the login form.
+        updateExperienceLoading(false)
+        view.isHidden = false
+    }
+
     internal func handleAppReady() {
-        if let attempt = activeAttempt, !attempt.awaitingWeb { return }
+        if let attempt = activeAttempt {
+            guard attempt.awaitingWeb else { return }
+        } else {
+            guard webviewIsReady else { return }
+        }
         reportOpenDuration()
         RTLLog.debug(.core, "Received appReady from webview")
         webviewIsReady = true
@@ -844,7 +874,7 @@ public final class RTLSdk {
         if let attempt = activeAttempt {
             finishAuthentication(attempt, result: result)
         } else {
-            // Bundled examples may sign in directly in the WebView.
+            // Readiness may also follow a reload of the current session.
             updateExperienceLoading(false)
         }
     }
@@ -856,6 +886,11 @@ public final class RTLSdk {
     ) {
         guard activeAttempt === attempt else { return }
         activeAttempt = nil
+        if !result.success {
+            webviewIsReady = false
+            webView?.isHidden = true
+            webView?.invalidateDocument()
+        }
         attempt.tokenTask?.cancel()
         attempt.timeoutTask?.cancel()
         let continuation = attempt.continuation
