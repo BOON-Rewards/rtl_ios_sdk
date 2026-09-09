@@ -1,6 +1,19 @@
 import UIKit
 import WebKit
 
+// The authentication state machine only needs these operations. Keeping this
+// boundary internal lets lifecycle tests use a view without WebKit processes.
+protocol RTLExperienceView: AnyObject {
+    var isHidden: Bool { get set }
+    func prepareAuthenticationDocument()
+    func invalidateDocument()
+    func load(url: URL)
+    func sendToWeb(_ type: RTLNativeMessageType, fields: [String: Any])
+    func sessionCookieHeader(for url: URL) async -> String?
+}
+
+extension RTLWebView: RTLExperienceView {}
+
 /// Embeddable webview for RTL experience
 public class RTLWebView: UIView {
 
