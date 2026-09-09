@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "RTLSdk",
     platforms: [
-        .iOS(.v13)
+        .iOS(.v15)
     ],
     products: [
         .library(
@@ -19,6 +19,11 @@ let package = Package(
             resources: [
                 .process("LICENSE.md")
             ]
+        ),
+        .testTarget(
+            name: "RTLSdkTests",
+            dependencies: ["RTLSdk"],
+            path: "Tests/RTLSdkTests"
         )
     ]
 )

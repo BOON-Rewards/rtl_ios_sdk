@@ -18,7 +18,7 @@
 		A1000004229F0004AAAAAAAA /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		A1000006229F0006AAAAAAAA /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A1000009229F0009AAAAAAAA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A100000A229F000AAAAAAAAA /* RTLSdkExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RTLSdkExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A100000A229F000AAAAAAAAA /* SdkExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SdkExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -36,12 +36,12 @@
 		A100000C229F000CAAAAAAAA = {
 			isa = PBXGroup;
 			children = (
-				A100000D229F000DAAAAAAAA /* RTLSdkExample */,
+				A100000D229F000DAAAAAAAA /* SdkExample */,
 				A100000E229F000EAAAAAAAA /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		A100000D229F000DAAAAAAAA /* RTLSdkExample */ = {
+		A100000D229F000DAAAAAAAA /* SdkExample */ = {
 			isa = PBXGroup;
 			children = (
 				A1000002229F0002AAAAAAAA /* AppDelegate.swift */,
@@ -49,13 +49,13 @@
 				A1000006229F0006AAAAAAAA /* LaunchScreen.storyboard */,
 				A1000009229F0009AAAAAAAA /* Info.plist */,
 			);
-			path = RTLSdkExample;
+			path = SdkExample;
 			sourceTree = "<group>";
 		};
 		A100000E229F000EAAAAAAAA /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A100000A229F000AAAAAAAAA /* RTLSdkExample.app */,
+				A100000A229F000AAAAAAAAA /* SdkExample.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -63,9 +63,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A100000F229F000FAAAAAAAA /* RTLSdkExample */ = {
+		A100000F229F000FAAAAAAAA /* SdkExample */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A1000010229F0010AAAAAAAA /* Build configuration list for PBXNativeTarget "RTLSdkExample" */;
+			buildConfigurationList = A1000010229F0010AAAAAAAA /* Build configuration list for PBXNativeTarget "SdkExample" */;
 			buildPhases = (
 				A1000011229F0011AAAAAAAA /* Sources */,
 				A100000B229F000BAAAAAAAA /* Frameworks */,
@@ -75,12 +75,12 @@
 			);
 			dependencies = (
 			);
-			name = RTLSdkExample;
+			name = SdkExample;
 			packageProductDependencies = (
 				A1000008229F0008AAAAAAAA /* RTLSdk */,
 			);
-			productName = RTLSdkExample;
-			productReference = A100000A229F000AAAAAAAAA /* RTLSdkExample.app */;
+			productName = SdkExample;
+			productReference = A100000A229F000AAAAAAAAA /* SdkExample.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -98,7 +98,7 @@
 					};
 				};
 			};
-			buildConfigurationList = A1000014229F0014AAAAAAAA /* Build configuration list for PBXProject "RTLSdkExample" */;
+			buildConfigurationList = A1000014229F0014AAAAAAAA /* Build configuration list for PBXProject "SdkExample" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -114,7 +114,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A100000F229F000FAAAAAAAA /* RTLSdkExample */,
+				A100000F229F000FAAAAAAAA /* SdkExample */,
 			);
 		};
 /* End PBXProject section */
@@ -195,7 +195,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -252,7 +252,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -269,9 +269,9 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6H9DK57L8X;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = RTLSdkExample/Info.plist;
+				INFOPLIST_FILE = SdkExample/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -296,9 +296,9 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6H9DK57L8X;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = RTLSdkExample/Info.plist;
+				INFOPLIST_FILE = SdkExample/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -319,7 +319,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A1000010229F0010AAAAAAAA /* Build configuration list for PBXNativeTarget "RTLSdkExample" */ = {
+		A1000010229F0010AAAAAAAA /* Build configuration list for PBXNativeTarget "SdkExample" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1000018229F0018AAAAAAAA /* Debug */,
@@ -328,7 +328,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A1000014229F0014AAAAAAAA /* Build configuration list for PBXProject "RTLSdkExample" */ = {
+		A1000014229F0014AAAAAAAA /* Build configuration list for PBXProject "SdkExample" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1000016229F0016AAAAAAAA /* Debug */,
