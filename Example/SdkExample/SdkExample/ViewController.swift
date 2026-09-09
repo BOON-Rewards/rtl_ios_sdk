@@ -5,8 +5,12 @@ class ViewController: UIViewController {
 
     private let statusLabel = UILabel()
     private let loginButton = UIButton(type: .system)
+    private let loadingOverlay = UIView()
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
+    private var logoutButton: UIBarButtonItem!
+    private var rtlWebView: RTLWebView?
 
-    // Test token - in a real app, this would come from your authentication system
+    // Staging-only test user. Production hosts fetch a token from their backend.
     private let testToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiMmIwMzBhMzYtYWQyMS0xMjIyLTEyMzItYzViZjg5OGQxN2IxIiwiZ2VuZGVyIjoiRmVtYWxlIiwiZmlyc3ROYW1lIjoiRXJpY2thIiwibGFzdE5hbWUiOiJOIiwiZW1haWwiOiJsZXZvbmFsdkBnZXRib29uLmNvbSJ9LCJvcmdJZCI6ImNrcDluM2Q4eTAwNjNrc3V2Y2hjNndmZ3QiLCJjaGFwdGVySWQiOiJjMzIwNDdiNC01ZDk5LTQ1MDUtYjczMy03MWYxZmRlNGU1NzAiLCJwb2ludHNQZXJEb2xsYXIiOjIwMCwiaWF0IjoxNzU0MzA3MDg0LCJleHAiOjE4NDkwMzMwMDJ9.3yTQC0bEeiogdHd4qM_Wh8bRnY_aQ9F9ngk5QUF_CF8"
 
     override func viewDidLoad() {
@@ -16,6 +20,16 @@ class ViewController: UIViewController {
 
         setupUI()
         initializeSDK()
+        setupLogoutButton()
+    }
+
+    private func setupLogoutButton() {
+        logoutButton = UIBarButtonItem(
+            title: "Logout",
+            style: .plain,
+            target: self,
+            action: #selector(logoutTapped)
+        )
     }
 
     private func setupUI() {
@@ -42,6 +56,37 @@ class ViewController: UIViewController {
             loginButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 20),
             loginButton.centerXAnchor.constraint(equalTo: view.centerXAnchor)
         ])
+
+        setupLoadingOverlay()
+    }
+
+    private func setupLoadingOverlay() {
+        loadingOverlay.translatesAutoresizingMaskIntoConstraints = false
+        loadingOverlay.backgroundColor = .systemBackground
+        loadingOverlay.isHidden = true
+        loadingOverlay.accessibilityViewIsModal = true
+
+        let loadingLabel = UILabel()
+        loadingLabel.text = "Loading program…"
+        loadingLabel.textAlignment = .center
+
+        let stack = UIStackView(arrangedSubviews: [loadingIndicator, loadingLabel])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 16
+
+        loadingOverlay.addSubview(stack)
+        view.addSubview(loadingOverlay)
+
+        NSLayoutConstraint.activate([
+            loadingOverlay.topAnchor.constraint(equalTo: view.topAnchor),
+            loadingOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            loadingOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            loadingOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            stack.centerXAnchor.constraint(equalTo: loadingOverlay.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: loadingOverlay.centerYAnchor)
+        ])
     }
 
     private func initializeSDK() {
@@ -55,6 +100,7 @@ class ViewController: UIViewController {
 
         // Create webview (the SDK manages its visibility)
         let webView = RTLSdk.shared.createWebView()
+        rtlWebView = webView
         webView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(webView)
 
@@ -87,53 +133,50 @@ class ViewController: UIViewController {
             )
 
             await MainActor.run {
-                if result.success {
-                    statusLabel.isHidden = true
-                    loginButton.isHidden = true
-
-                    // Enable location features (SDK handles permissions internally)
-                    RTLSdk.shared.enableLocationFeatures()
-
-                    #if DEBUG
-                    // Reset notification history for testing geofence notifications
-                    RTLSdk.shared.resetNotificationHistory()
-                    #endif
-                } else {
+                if !result.success && result.errorCode != "request_cancelled" {
                     statusLabel.text = "Failed to load RTL experience (\(result.errorCode ?? "unknown_error"))"
                     loginButton.isEnabled = true
                 }
             }
         }
     }
+
+    @objc private func logoutTapped() {
+        RTLSdk.shared.logout()
+        RTLSdk.shared.disableLocationFeatures()
+        rtlWebView?.isHidden = true
+        setLoading(false)
+        navigationItem.rightBarButtonItem = nil
+        statusLabel.isHidden = false
+        statusLabel.text = "Tap Login to continue"
+        loginButton.isHidden = false
+        loginButton.isEnabled = true
+    }
 }
 
 // MARK: - RTLSdkDelegate
 
 extension ViewController: RTLSdkDelegate {
-    @objc func onAuthenticated(accessToken: String, refreshToken: String) {
-        print("User authenticated")
-    }
-
-    func onLogout() {
-        print("User logged out")
-        statusLabel.isHidden = false
-        statusLabel.text = "Session ended. Tap Login to continue"
-        loginButton.isHidden = false
-        loginButton.isEnabled = true
-    }
-
-    func onOpenUrl(url: URL, forceExternal: Bool) {
-        print("URL opened: \(url), forceExternal: \(forceExternal)")
-        // URL is already opened by SDK - this callback is informational
-    }
-
     func onReady() {
         print("RTL app is ready")
+        statusLabel.isHidden = true
+        loginButton.isHidden = true
+        navigationItem.rightBarButtonItem = logoutButton
+
+        RTLSdk.shared.enableLocationFeatures()
+
+        #if DEBUG
+        RTLSdk.shared.resetNotificationHistory()
+        #endif
     }
 
-    func onNeedsToken() async -> String? {
+    func onLoadingStateChanged(isLoading: Bool) {
+        setLoading(isLoading)
+    }
+
+    func provideAuthToken() async -> String? {
         print("SDK requesting token...")
-        // In a real app, call your auth service here
+        // In a real app, call your auth service here.
         return testToken
     }
 
@@ -144,5 +187,18 @@ extension ViewController: RTLSdkDelegate {
 
     func onGeofenceEnter(store: RTLStore) {
         print("Entered geofence for store: \(store.name)")
+    }
+}
+
+private extension ViewController {
+    func setLoading(_ isLoading: Bool) {
+        if isLoading {
+            view.bringSubviewToFront(loadingOverlay)
+            loadingOverlay.isHidden = false
+            loadingIndicator.startAnimating()
+        } else {
+            loadingIndicator.stopAnimating()
+            loadingOverlay.isHidden = true
+        }
     }
 }

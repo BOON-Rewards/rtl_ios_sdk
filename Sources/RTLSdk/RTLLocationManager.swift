@@ -25,13 +25,13 @@ class RTLLocationManager: NSObject, CLLocationManagerDelegate {
             locationManager.allowsBackgroundLocationUpdates = true
             locationManager.pausesLocationUpdatesAutomatically = false
         } else {
-            print("[RTLSdk] ⚠️ Background location mode is not enabled. Add UIBackgroundModes/location to Info.plist before enabling background location features.")
+            RTLLog.debug(.location, "⚠️ Background location mode is not enabled. Add UIBackgroundModes/location to Info.plist before enabling background location features.")
         }
 
         // Enable debug mode when running from Xcode (DEBUG builds)
         #if DEBUG
         self.debugMode = true
-        print("[RTLSdk] 🔧 Debug mode enabled - using standard location updates for GPX testing")
+        RTLLog.debug(.location, "🔧 Debug mode enabled - using standard location updates for GPX testing")
         #endif
     }
 
@@ -71,29 +71,29 @@ class RTLLocationManager: NSObject, CLLocationManagerDelegate {
     /// - Parameter notifyOnAlreadyGranted: If true, calls onPermissionChange even if already granted. Default is false to avoid duplicate notifications.
     func requestPermission(notifyOnAlreadyGranted: Bool = false) {
         let currentStatus = authorizationStatus
-        print("[RTLSdk] Requesting location permission... Current status: \(currentStatus.rawValue)")
+        RTLLog.info(.location, "Requesting location permission... Current status: \(currentStatus.rawValue)")
 
         switch currentStatus {
         case .notDetermined:
-            print("[RTLSdk] Status not determined, showing permission dialog...")
+            RTLLog.debug(.location, "Status not determined, showing permission dialog...")
             locationManager.requestAlwaysAuthorization()
         case .authorizedAlways:
-            print("[RTLSdk] Already have Always authorization")
+            RTLLog.info(.location, "Already have Always authorization")
             if notifyOnAlreadyGranted {
                 onPermissionChange?(true)
             }
             startMonitoring()
             requestLocation()
         case .authorizedWhenInUse:
-            print("[RTLSdk] Have WhenInUse, requesting upgrade to Always...")
+            RTLLog.debug(.location, "Have WhenInUse, requesting upgrade to Always...")
             locationManager.requestAlwaysAuthorization()
         case .denied, .restricted:
-            print("[RTLSdk] Permission denied/restricted. User must enable in Settings.")
+            RTLLog.error(.location, "Permission denied/restricted. User must enable in Settings.")
             if notifyOnAlreadyGranted {
                 onPermissionChange?(false)
             }
         @unknown default:
-            print("[RTLSdk] Unknown authorization status")
+            RTLLog.debug(.location, "Unknown authorization status")
             locationManager.requestAlwaysAuthorization()
         }
     }
@@ -101,22 +101,22 @@ class RTLLocationManager: NSObject, CLLocationManagerDelegate {
     /// Start monitoring location changes
     func startMonitoring() {
         guard hasBackgroundPermission else {
-            print("[RTLSdk] Cannot start monitoring: no background permission")
+            RTLLog.error(.location, "Cannot start monitoring: no background permission")
             return
         }
 
         if debugMode {
-            print("[RTLSdk] 🔧 Starting STANDARD location updates (debug mode for GPX testing)")
+            RTLLog.debug(.location, "🔧 Starting STANDARD location updates (debug mode for GPX testing)")
             locationManager.startUpdatingLocation()
         } else {
-            print("[RTLSdk] Starting significant location monitoring")
+            RTLLog.info(.location, "Starting significant location monitoring")
             locationManager.startMonitoringSignificantLocationChanges()
         }
     }
 
     /// Stop monitoring location changes
     func stopMonitoring() {
-        print("[RTLSdk] Stopping location monitoring")
+        RTLLog.debug(.location, "Stopping location monitoring")
         if debugMode {
             locationManager.stopUpdatingLocation()
         } else {
@@ -127,7 +127,7 @@ class RTLLocationManager: NSObject, CLLocationManagerDelegate {
     /// Request a single location update
     func requestLocation() {
         guard hasAnyPermission else {
-            print("[RTLSdk] Cannot request location: no permission")
+            RTLLog.error(.location, "Cannot request location: no permission")
             return
         }
         locationManager.requestLocation()
@@ -154,7 +154,7 @@ class RTLLocationManager: NSObject, CLLocationManagerDelegate {
         let granted = status == .authorizedAlways
         let hasWhenInUse = status == .authorizedWhenInUse
 
-        print("[RTLSdk] Location authorization changed: \(status.rawValue), background: \(granted), whenInUse: \(hasWhenInUse)")
+        RTLLog.debug(.location, "Location authorization changed: \(status.rawValue), background: \(granted), whenInUse: \(hasWhenInUse)")
 
         onPermissionChange?(granted)
 
@@ -164,18 +164,18 @@ class RTLLocationManager: NSObject, CLLocationManagerDelegate {
             requestLocation()
         } else if hasWhenInUse {
             // We have WhenInUse but not Always - can still get location
-            print("[RTLSdk] Have WhenInUse permission, requesting location...")
+            RTLLog.debug(.location, "Have WhenInUse permission, requesting location...")
             requestLocation()
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        print("[RTLSdk] Location update: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        RTLLog.debug(.location, "Location update received")
         onLocationUpdate?(location)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("[RTLSdk] Location error: \(error.localizedDescription)")
+        RTLLog.error(.location, "Location error: \(error.localizedDescription)")
     }
 }

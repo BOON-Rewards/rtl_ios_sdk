@@ -28,7 +28,7 @@ class RTLGeofenceManager: NSObject, CLLocationManagerDelegate {
 
         // Check if we need to update at all
         if newStoreIds == existingStoreIds {
-            print("[RTLSdk] 🔄 Geofences unchanged, skipping update")
+            RTLLog.warn(.geofence, "🔄 Geofences unchanged, skipping update")
             return
         }
 
@@ -36,13 +36,13 @@ class RTLGeofenceManager: NSObject, CLLocationManagerDelegate {
         let storesToRemove = existingStoreIds.subtracting(newStoreIds)
         let storesToAdd = storesToMonitor.filter { !existingStoreIds.contains($0.id) }
 
-        print("[RTLSdk] 🎯 Updating geofences: removing \(storesToRemove.count), adding \(storesToAdd.count)")
+        RTLLog.debug(.geofence, "🎯 Updating geofences: removing \(storesToRemove.count), adding \(storesToAdd.count)")
 
         // Remove old stores from our tracking dict FIRST
         // This ensures we don't accumulate failed registrations
         for storeId in storesToRemove {
             monitoredStores.removeValue(forKey: storeId)
-            print("[RTLSdk]   ❌ Removed: \(storeId)")
+            RTLLog.debug(.geofence, "❌ Removed: \(storeId)")
         }
 
         // Then stop monitoring any matching regions in iOS
@@ -58,7 +58,7 @@ class RTLGeofenceManager: NSObject, CLLocationManagerDelegate {
         let storesToActuallyAdd = Array(storesToAdd.prefix(remainingCapacity))
 
         if storesToActuallyAdd.count < storesToAdd.count {
-            print("[RTLSdk] ⚠️ Only adding \(storesToActuallyAdd.count) of \(storesToAdd.count) stores (capacity limit)")
+            RTLLog.debug(.geofence, "⚠️ Only adding \(storesToActuallyAdd.count) of \(storesToAdd.count) stores (capacity limit)")
         }
 
         for store in storesToActuallyAdd {
@@ -71,13 +71,13 @@ class RTLGeofenceManager: NSObject, CLLocationManagerDelegate {
             region.notifyOnEntry = true
             region.notifyOnExit = false
 
-            print("[RTLSdk]   📌 Added \(store.name): center=(\(store.latitude), \(store.longitude)), radius=\(geofenceRadius)m")
+            RTLLog.debug(.geofence, "Added a geofence with radius \(geofenceRadius)m")
 
             locationManager.startMonitoring(for: region)
             monitoredStores[store.id] = store
         }
 
-        print("[RTLSdk] ✅ Now monitoring \(monitoredStores.count) geofences")
+        RTLLog.debug(.geofence, "✅ Now monitoring \(monitoredStores.count) geofences")
     }
 
     /// Stop all geofence monitoring
@@ -86,7 +86,7 @@ class RTLGeofenceManager: NSObject, CLLocationManagerDelegate {
             locationManager.stopMonitoring(for: region)
         }
         monitoredStores.removeAll()
-        print("[RTLSdk] Stopped all geofence monitoring")
+        RTLLog.debug(.geofence, "Stopped all geofence monitoring")
     }
 
     /// Get store by ID
@@ -97,26 +97,26 @@ class RTLGeofenceManager: NSObject, CLLocationManagerDelegate {
     // MARK: - CLLocationManagerDelegate
 
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
-        print("[RTLSdk] 🚨 GEOFENCE ENTERED: \(region.identifier)")
+        RTLLog.debug(.geofence, "🚨 GEOFENCE ENTERED: \(region.identifier)")
 
         guard let circularRegion = region as? CLCircularRegion,
               let store = monitoredStores[circularRegion.identifier] else {
-            print("[RTLSdk] ❌ Store not found for geofence: \(region.identifier)")
+            RTLLog.error(.geofence, "❌ Store not found for geofence: \(region.identifier)")
             return
         }
 
-        print("[RTLSdk] 🏪 Entered store: \(store.name) @ (\(store.latitude), \(store.longitude))")
+        RTLLog.debug(.geofence, "Matched the entered geofence to a hyperlocal offer")
         onGeofenceEnter?(store)
     }
 
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         // Currently not handling exit events
-        print("[RTLSdk] Exited geofence: \(region.identifier)")
+        RTLLog.debug(.geofence, "Exited geofence: \(region.identifier)")
     }
 
     func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
         let regionId = region?.identifier ?? "unknown"
-        print("[RTLSdk] Geofence monitoring failed for \(regionId): \(error.localizedDescription)")
+        RTLLog.error(.geofence, "Geofence monitoring failed for \(regionId): \(error.localizedDescription)")
 
         // Remove failed registration from tracking dict
         if let id = region?.identifier {
@@ -125,7 +125,7 @@ class RTLGeofenceManager: NSObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didStartMonitoringFor region: CLRegion) {
-        print("[RTLSdk] Started monitoring geofence: \(region.identifier)")
+        RTLLog.info(.geofence, "Started monitoring geofence: \(region.identifier)")
         // Request state to check if we're already inside
         locationManager.requestState(for: region)
     }
@@ -133,17 +133,17 @@ class RTLGeofenceManager: NSObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
         switch state {
         case .inside:
-            print("[RTLSdk] 📍 Already INSIDE geofence: \(region.identifier)")
+            RTLLog.debug(.geofence, "📍 Already INSIDE geofence: \(region.identifier)")
             // Trigger entry callback since we're already inside
             if let circularRegion = region as? CLCircularRegion,
                let store = monitoredStores[circularRegion.identifier] {
-                print("[RTLSdk] 🏪 Triggering entry for: \(store.name)")
+                RTLLog.debug(.geofence, "🏪 Triggering entry for: \(store.name)")
                 onGeofenceEnter?(store)
             }
         case .outside:
-            print("[RTLSdk] 📍 Outside geofence: \(region.identifier)")
+            RTLLog.debug(.geofence, "📍 Outside geofence: \(region.identifier)")
         case .unknown:
-            print("[RTLSdk] 📍 Unknown state for geofence: \(region.identifier)")
+            RTLLog.debug(.geofence, "📍 Unknown state for geofence: \(region.identifier)")
         @unknown default:
             break
         }
