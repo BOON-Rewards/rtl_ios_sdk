@@ -1,5 +1,5 @@
 import XCTest
-@_spi(RTLExample) @_spi(RTLExample) @testable import RTLSdk
+@_spi(RTLExample) @testable import RTLSdk
 
 @MainActor
 final class RTLSdkLoadingTests: XCTestCase {
@@ -125,7 +125,9 @@ final class RTLSdkLoadingTests: XCTestCase {
         let presentation = Task { await sdk.presentExperience() }
         await waitForHandoff(view)
         presentation.cancel()
-        _ = await presentation.value
+        let result = await presentation.value
+        XCTAssertEqual(result.errorCode, "request_cancelled")
+        XCTAssertEqual(delegate.loadingStates, [true, false])
         sdk.handleAppReady()
         XCTAssertTrue(view.isHidden)
         XCTAssertEqual(delegate.readyCount, 0)
@@ -295,6 +297,12 @@ private final class RecordingWebView: RTLWebView {
         return expectation
     }()
     private(set) var requestedURLs: [URL] = []
+
+    // These tests exercise the SDK's authentication state machine. Document
+    // replacement/clearing would start real WebKit processes even though load
+    // is stubbed below, making cancellation depend on simulator startup time.
+    override func prepareAuthenticationDocument() {}
+    override func invalidateDocument() {}
 
     override func load(url: URL) {
         // Observe SDK navigation synchronously. WKWebView.url depends on a
