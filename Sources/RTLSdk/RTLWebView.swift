@@ -6,9 +6,9 @@ public class RTLWebView: UIView {
 
     // MARK: - Properties
 
-    private let webView: WKWebView
+    private var webView: WKWebView
     private weak var sdk: RTLSdk?
-    private let bridge: RTLBridge
+    private var bridge: RTLBridge
     private let hapticEngine: RTLHapticEngine
     private let refreshControl = UIRefreshControl()
     private var backgroundObserver: NSObjectProtocol?
@@ -33,6 +33,23 @@ public class RTLWebView: UIView {
         self.hapticEngine = hapticEngine
         self.bridge = RTLBridge(sdk: sdk, hapticEngine: hapticEngine)
 
+        self.webView = WKWebView(frame: .zero, configuration: Self.configuration(bridge: bridge))
+
+        super.init(frame: .zero)
+        refreshControl.addTarget(self, action: #selector(handlePullToRefresh), for: .valueChanged)
+
+        bridge.attach(to: webView, owner: self)
+        setupWebView()
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.hapticEngine.stop()
+        }
+    }
+
+    private static func configuration(bridge: RTLBridge) -> WKWebViewConfiguration {
         // Configure WKWebView
         let configuration = WKWebViewConfiguration()
         let contentController = WKUserContentController()
@@ -56,19 +73,7 @@ public class RTLWebView: UIView {
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
 
-        self.webView = WKWebView(frame: .zero, configuration: configuration)
-
-        super.init(frame: .zero)
-
-        bridge.attach(to: webView)
-        setupWebView()
-        backgroundObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didEnterBackgroundNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.hapticEngine.stop()
-        }
+        return configuration
     }
 
     #if DEBUG
@@ -130,7 +135,6 @@ public class RTLWebView: UIView {
         webView.scrollView.bounces = true
         refreshControl.accessibilityLabel = "Refresh"
         refreshControl.tintColor = UIColor(white: 0.93, alpha: 1.0)
-        refreshControl.addTarget(self, action: #selector(handlePullToRefresh), for: .valueChanged)
         webView.scrollView.refreshControl = refreshControl
 
         // Enable inspection in debug builds
@@ -166,6 +170,27 @@ public class RTLWebView: UIView {
         refreshControl.endRefreshing()
     }
 
+    /// Retire the old document and its queued messages without changing the host view.
+    func invalidateDocument() {
+        bridge.invalidate()
+        webView.stopLoading()
+        webView.loadHTMLString("", baseURL: nil)
+        webView.isHidden = true
+        hapticEngine.stop()
+    }
+
+    func prepareAuthenticationDocument() {
+        guard let sdk else { return }
+        invalidateDocument()
+        webView.navigationDelegate = nil
+        webView.uiDelegate = nil
+        webView.removeFromSuperview()
+        bridge = RTLBridge(sdk: sdk, hapticEngine: hapticEngine)
+        webView = WKWebView(frame: .zero, configuration: Self.configuration(bridge: bridge))
+        bridge.attach(to: webView, owner: self)
+        setupWebView()
+    }
+
     /// Load a URL in the webview
     /// - Parameter url: The URL to load
     func load(url: URL) {
@@ -177,6 +202,8 @@ public class RTLWebView: UIView {
     /// Host integrations should use `RTLSdk.presentExperience(...)`.
     @_spi(RTLExample)
     public func loadLoginForExample(url: URL) {
+        sdk?.beginExampleLogin(in: self)
+        prepareAuthenticationDocument()
         load(url: url)
     }
 

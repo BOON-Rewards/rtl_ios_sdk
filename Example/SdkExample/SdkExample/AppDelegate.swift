@@ -64,6 +64,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         completionHandler()
     }
 
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        if let options = RTLSdk.notificationPresentationOptions(for: notification.request) {
+            completionHandler(options)
+            return
+        }
+        // Apply the host app's presentation policy to other notifications.
+        completionHandler([])
+    }
+
     private func parseRTLPushEventId(from userInfo: [AnyHashable: Any]) -> String? {
         if let actionType = userInfo["rtlActionType"] as? String,
            actionType == rtlActionType,

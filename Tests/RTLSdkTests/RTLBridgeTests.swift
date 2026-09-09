@@ -49,6 +49,17 @@ final class RTLBridgeTests: XCTestCase {
         XCTAssertNil(try RTLWebMessage.parse(["type": "somethingElse"]))
     }
 
+    func testForegroundLocationRequiresACorrelationId() throws {
+        guard case .requestLocation(let requestId) = try RTLWebMessage.parse([
+            "type": "requestLocation", "requestId": "location-1"
+        ]) else { return XCTFail("Expected requestLocation") }
+        XCTAssertEqual(requestId, "location-1")
+        for value in ["", String(repeating: "a", count: 129), 42] as [Any] {
+            XCTAssertThrowsError(try RTLWebMessage.parse(["type": "requestLocation", "requestId": value]))
+        }
+        XCTAssertThrowsError(try RTLWebMessage.parse(["type": "requestLocation"]))
+    }
+
     func testRejectsOpenMessageWithoutSurface() {
         XCTAssertThrowsError(try RTLWebMessage.parse([
             "type": "openExternalUrl",
@@ -104,6 +115,7 @@ final class RTLBridgeTests: XCTestCase {
             .logoutRequested,
             .locationPermissionStatus,
             .locationUpdate,
+            .locationResult,
             .overlayCompleted
         ]
 

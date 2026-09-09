@@ -6,15 +6,29 @@ final class RTLBridge: NSObject, WKScriptMessageHandler {
 
     private weak var sdk: RTLSdk?
     private weak var webView: WKWebView?
+    private weak var owner: RTLWebView?
+    private var valid = true
     private let hapticEngine: RTLHapticEngine
+    private var foregroundLocation: RTLForegroundLocation?
 
     init(sdk: RTLSdk, hapticEngine: RTLHapticEngine) {
         self.sdk = sdk
         self.hapticEngine = hapticEngine
     }
 
-    func attach(to webView: WKWebView) {
+    func attach(to webView: WKWebView, owner: RTLWebView) {
+        self.owner = owner
         self.webView = webView
+    }
+
+    func invalidate() {
+        valid = false
+        foregroundLocation?.cancel()
+        foregroundLocation = nil
+    }
+
+    private var acceptsMessages: Bool {
+        valid && owner.map { sdk?.isCurrentWebView($0) == true } == true
     }
 
     func sendToWeb(_ type: RTLNativeMessageType, fields: [String: Any] = [:]) {
@@ -25,7 +39,11 @@ final class RTLBridge: NSObject, WKScriptMessageHandler {
 
         RTLLog.debug(.bridge, "Sending message to web app: \(type.rawValue)")
         DispatchQueue.main.async { [weak self] in
-            self?.webView?.evaluateJavaScript(
+            guard let self, self.acceptsMessages else { return }
+            if type == .locationResult {
+                guard let url = self.webView?.url, self.sdk?.isAllowedWebURL(url) == true else { return }
+            }
+            self.webView?.evaluateJavaScript(
                 "window.postMessage(\(json), window.location.origin)",
                 completionHandler: nil
             )
@@ -36,7 +54,8 @@ final class RTLBridge: NSObject, WKScriptMessageHandler {
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage
     ) {
-        guard message.name == Self.name,
+        guard acceptsMessages, message.webView === webView,
+              message.name == Self.name,
               message.frameInfo.isMainFrame,
               isAllowed(origin: message.frameInfo.securityOrigin) else {
             RTLLog.warn(.bridge, "Ignoring a bridge message from an untrusted frame")
@@ -76,6 +95,11 @@ final class RTLBridge: NSObject, WKScriptMessageHandler {
             sdk?.handleSessionExpired()
         case .requestLocationPermission:
             sdk?.handleLocationPermissionRequest()
+        case .requestLocation(let requestId):
+            if foregroundLocation == nil { foregroundLocation = RTLForegroundLocation() }
+            foregroundLocation?.request { [weak self] fields in
+                self?.sendToWeb(.locationResult, fields: fields.merging(["requestId": requestId]) { _, new in new })
+            }
         case .hapticPlay(let pattern):
             hapticEngine.play(pattern)
         case .requestNativeCapabilities:
@@ -111,6 +135,7 @@ enum RTLWebMessage {
     case appReady
     case sessionExpired
     case requestLocationPermission
+    case requestLocation(requestId: String)
     case hapticPlay(RTLHapticPattern)
     case requestNativeCapabilities
 
@@ -122,6 +147,7 @@ enum RTLWebMessage {
         case .appReady: return "appReady"
         case .sessionExpired: return "sessionExpired"
         case .requestLocationPermission: return "requestLocationPermission"
+        case .requestLocation: return "requestLocation"
         case .hapticPlay: return "hapticPlay"
         case .requestNativeCapabilities: return "requestNativeCapabilities"
         }
@@ -157,6 +183,12 @@ enum RTLWebMessage {
         case "appReady": return .appReady
         case "sessionExpired": return .sessionExpired
         case "requestLocationPermission": return .requestLocationPermission
+        case "requestLocation":
+            guard let requestId = message["requestId"] as? String,
+                  !requestId.isEmpty, requestId.count <= 128 else {
+                throw RTLWebMessageError.invalid("requestId must be a non-empty string of at most 128 characters")
+            }
+            return .requestLocation(requestId: requestId)
         case "hapticPlay":
             return .hapticPlay(try RTLHapticPattern.parse(payload: message["payload"] as Any))
         case "requestNativeCapabilities": return .requestNativeCapabilities
@@ -174,6 +206,7 @@ enum RTLNativeMessageType: String {
     case logoutRequested
     case locationPermissionStatus
     case locationUpdate
+    case locationResult
     case overlayCompleted
 }
 

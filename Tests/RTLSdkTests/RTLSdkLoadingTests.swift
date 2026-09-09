@@ -1,5 +1,5 @@
 import XCTest
-@testable import RTLSdk
+@_spi(RTLExample) @_spi(RTLExample) @testable import RTLSdk
 
 @MainActor
 final class RTLSdkLoadingTests: XCTestCase {
@@ -28,6 +28,7 @@ final class RTLSdkLoadingTests: XCTestCase {
             delegate: delegate
         )
         let webView = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        sdk.beginExampleLogin(in: webView)
         sdk.handleAppReady()
         delegate.reset()
 
@@ -53,6 +54,7 @@ final class RTLSdkLoadingTests: XCTestCase {
             delegate: delegate
         )
         let webView = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        sdk.beginExampleLogin(in: webView)
         sdk.handleAppReady()
         delegate.reset()
 
@@ -76,6 +78,7 @@ final class RTLSdkLoadingTests: XCTestCase {
             delegate: delegate
         )
         let webView = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        sdk.beginExampleLogin(in: webView)
         sdk.handleAppReady()
         delegate.reset()
 
@@ -88,6 +91,136 @@ final class RTLSdkLoadingTests: XCTestCase {
         XCTAssertEqual(delegate.loadingStates, [true, false])
         XCTAssertEqual(delegate.readyCount, 0)
         XCTAssertTrue(webView.isHidden)
+    }
+
+    func testLateReadyAfterLogoutDuringHandoffStaysHiddenAndRetrySucceeds() async {
+        let delegate = LoadingDelegate(token: "token")
+        let sdk = RTLSdk.shared
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        let presentation = Task { await sdk.presentExperience() }
+        await waitForHandoff(view)
+        sdk.logout()
+        let cancelled = await presentation.value
+        XCTAssertEqual(cancelled.errorCode, "request_cancelled")
+        sdk.handleAppReady()
+        XCTAssertTrue(view.isHidden)
+        XCTAssertEqual(delegate.readyCount, 0)
+
+        let retryView = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        let retry = Task { await sdk.presentExperience() }
+        await waitForHandoff(retryView)
+        sdk.handleAppReady()
+        let result = await retry.value
+        XCTAssertTrue(result.success)
+        XCTAssertFalse(retryView.isHidden)
+        XCTAssertEqual(delegate.readyCount, 1)
+    }
+
+    func testLateReadyAfterCallerCancellationIsIgnored() async {
+        let delegate = LoadingDelegate(token: "token")
+        let sdk = RTLSdk.shared
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        let presentation = Task { await sdk.presentExperience() }
+        await waitForHandoff(view)
+        presentation.cancel()
+        _ = await presentation.value
+        sdk.handleAppReady()
+        XCTAssertTrue(view.isHidden)
+        XCTAssertEqual(delegate.readyCount, 0)
+    }
+
+    func testLateReadyAfterTimeoutIsIgnored() async {
+        let delegate = LoadingDelegate(token: "token")
+        let sdk = RTLSdk.shared
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        let presentation = Task { await sdk.presentExperience() }
+        await waitForHandoff(view)
+        let result = await presentation.value
+        XCTAssertEqual(result.errorCode, "login_timeout")
+        sdk.handleAppReady()
+        XCTAssertTrue(view.isHidden)
+        XCTAssertEqual(delegate.readyCount, 0)
+    }
+
+    func testExampleLoginShowsSignInWithoutWaitingForReadiness() {
+        let delegate = LoadingDelegate()
+        let sdk = RTLSdk.shared
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        sdk.handleAppReady()
+        XCTAssertEqual(delegate.readyCount, 0)
+        let loginURL = URL(string: "https://example.com")!
+        view.loadLoginForExample(url: loginURL)
+        XCTAssertEqual(view.requestedURLs, [loginURL])
+        XCTAssertFalse(view.isHidden)
+        XCTAssertTrue(delegate.loadingStates.isEmpty)
+        XCTAssertEqual(delegate.readyCount, 0)
+        XCTAssertEqual(delegate.tokenRequestCount, 0)
+        sdk.handleAppReady()
+        XCTAssertEqual(delegate.readyCount, 1)
+        XCTAssertTrue(delegate.loadingStates.isEmpty)
+        XCTAssertEqual(delegate.tokenRequestCount, 0)
+        sdk.logout()
+        sdk.handleAppReady()
+        XCTAssertTrue(view.isHidden)
+        XCTAssertEqual(delegate.readyCount, 1)
+    }
+
+    func testLogoutDuringInternalLoginHidesSignInAndRejectsLateReadiness() {
+        let delegate = LoadingDelegate()
+        let sdk = RTLSdk.shared
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        sdk.beginExampleLogin(in: view)
+        sdk.logout()
+        sdk.handleAppReady()
+        XCTAssertTrue(delegate.loadingStates.isEmpty)
+        XCTAssertEqual(delegate.readyCount, 0)
+        XCTAssertTrue(view.isHidden)
+    }
+
+    func testInternalLoginFailureEndsAttemptAndAllowsRetry() {
+        let delegate = LoadingDelegate()
+        let sdk = RTLSdk.shared
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        sdk.beginExampleLogin(in: view)
+        sdk.handleAuthFailure()
+        sdk.handleAppReady()
+        XCTAssertTrue(delegate.loadingStates.isEmpty)
+        XCTAssertEqual(delegate.readyCount, 0)
+        XCTAssertTrue(view.isHidden)
+
+        sdk.beginExampleLogin(in: view)
+        XCTAssertFalse(view.isHidden)
+        sdk.handleAppReady()
+        XCTAssertTrue(delegate.loadingStates.isEmpty)
+        XCTAssertEqual(delegate.readyCount, 1)
+        XCTAssertFalse(view.isHidden)
+    }
+
+    func testSwitchingToExampleLoginDismissesPendingTokenLoader() async {
+        let delegate = LoadingDelegate(token: "token")
+        let sdk = RTLSdk.shared
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        let presentation = Task { await sdk.presentExperience() }
+        await waitForHandoff(view)
+        XCTAssertEqual(delegate.loadingStates, [true])
+        XCTAssertTrue(view.isHidden)
+
+        sdk.beginExampleLogin(in: view)
+        let result = await presentation.value
+        XCTAssertEqual(result.errorCode, "request_cancelled")
+        XCTAssertEqual(delegate.loadingStates, [true, false])
+        XCTAssertFalse(view.isHidden)
+        XCTAssertEqual(delegate.readyCount, 0)
+        sdk.handleAppReady()
+        XCTAssertEqual(delegate.readyCount, 1)
+        XCTAssertFalse(view.isHidden)
     }
 
     private func waitForHandoff(_ view: RecordingWebView) async {

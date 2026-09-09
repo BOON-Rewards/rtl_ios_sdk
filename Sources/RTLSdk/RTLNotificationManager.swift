@@ -2,7 +2,8 @@ import Foundation
 import UserNotifications
 
 /// Manages local notifications with rate limiting rules
-class RTLNotificationManager: NSObject, UNUserNotificationCenterDelegate {
+final class RTLNotificationManager {
+    static let identifierPrefix = "com.affinaloyalty.rtlsdk.offer."
     private let notificationCenter = UNUserNotificationCenter.current()
     private var notificationHistory: [NotificationRecord] = []
 
@@ -31,9 +32,8 @@ class RTLNotificationManager: NSObject, UNUserNotificationCenterDelegate {
         let timestamp: Date
     }
 
-    override init() {
-        super.init()
-        notificationCenter.delegate = self
+    init() {
+        // The host owns the notification center delegate and its presentation policy.
         loadHistory()
     }
 
@@ -125,7 +125,7 @@ class RTLNotificationManager: NSObject, UNUserNotificationCenterDelegate {
         content.sound = .default
 
         let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
+            identifier: Self.identifierPrefix + UUID().uuidString,
             content: content,
             trigger: nil // Immediate delivery
         )
@@ -172,20 +172,15 @@ class RTLNotificationManager: NSObject, UNUserNotificationCenterDelegate {
         RTLLog.debug(.notifications, "🧹 Notification history cleared for testing")
     }
     #endif
+}
 
-    // MARK: - UNUserNotificationCenterDelegate
-
-    /// Show notifications even when app is in foreground
-    func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        RTLLog.debug(.notifications, "📬 Presenting notification in foreground: \(notification.request.content.title)")
-        if #available(iOS 14.0, *) {
-            completionHandler([.banner, .sound])
-        } else {
-            completionHandler([.alert, .sound])
-        }
+public extension RTLSdk {
+    /// Returns foreground presentation options for SDK hyperlocal notifications,
+    /// or nil for notifications that should continue through the host's handler.
+    static func notificationPresentationOptions(
+        for request: UNNotificationRequest
+    ) -> UNNotificationPresentationOptions? {
+        guard request.identifier.hasPrefix(RTLNotificationManager.identifierPrefix) else { return nil }
+        return [.banner, .sound]
     }
 }

@@ -17,7 +17,7 @@ let package = Package(
             name: "RTLSdk",
             path: "Sources/RTLSdk",
             resources: [
-                .process("LICENSE.md")
+                .process("PrivacyInfo.xcprivacy")
             ]
         ),
         .testTarget(
