@@ -105,7 +105,7 @@ public final class RTLSdk {
 
     // MARK: - State
 
-    private weak var webView: RTLWebView?
+    private weak var webView: (any RTLExperienceView)?
 
     /// When the current open began loading, for the one number that says how
     /// long an open takes. Cleared when it is reported, so a later navigation
@@ -181,9 +181,9 @@ public final class RTLSdk {
         createWebView(using: { RTLWebView(sdk: $0) })
     }
 
-    // Internal factory lets lifecycle tests record navigation without loading
-    // remote documents. Host apps always use the real WebView above.
-    func createWebView<View: RTLWebView>(using makeView: (RTLSdk) -> View) -> View {
+    // Host apps always use the real WebView above; lifecycle tests can supply
+    // an in-memory implementation without creating WebKit processes.
+    func createWebView<View: RTLExperienceView>(using makeView: (RTLSdk) -> View) -> View {
         guard isInitialized else {
             fatalError("RTLSdk not initialized. Call initialize() first.")
         }
@@ -264,7 +264,7 @@ public final class RTLSdk {
         webviewIsReady = false
         webView?.isHidden = true
         // An already loaded Consumer ends the server session and acknowledges logout.
-        webView?.sendToWeb(.logoutRequested)
+        webView?.sendToWeb(.logoutRequested, fields: [:])
     }
 
     /// Route an RTL deep link received by the host app.
@@ -579,7 +579,7 @@ public final class RTLSdk {
         RTLLog.info(.core, "Open took \(milliseconds)ms from loadStart to appReady")
     }
 
-    internal func isCurrentWebView(_ view: RTLWebView) -> Bool { webView === view }
+    internal func isCurrentWebView(_ view: any RTLExperienceView) -> Bool { webView === view }
 
     private func beginAuthentication(_ attempt: AuthenticationAttempt) {
         // Register ownership before asking the host for a token. A cancelled
@@ -592,7 +592,7 @@ public final class RTLSdk {
         webviewIsReady = false
     }
 
-    internal func beginExampleLogin(in view: RTLWebView) {
+    internal func beginExampleLogin(in view: any RTLExperienceView) {
         guard isCurrentWebView(view) else { return }
         let attempt = AuthenticationAttempt()
         attempt.awaitingWeb = true

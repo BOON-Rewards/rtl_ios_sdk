@@ -103,6 +103,8 @@ final class RTLSdkLoadingTests: XCTestCase {
         sdk.logout()
         let cancelled = await presentation.value
         XCTAssertEqual(cancelled.errorCode, "request_cancelled")
+        XCTAssertEqual(view.sentMessages, [.logoutRequested])
+        XCTAssertGreaterThan(view.invalidationCount, 0)
         sdk.handleAppReady()
         XCTAssertTrue(view.isHidden)
         XCTAssertEqual(delegate.readyCount, 0)
@@ -228,6 +230,7 @@ final class RTLSdkLoadingTests: XCTestCase {
     private func waitForHandoff(_ view: RecordingWebView) async {
         await fulfillment(of: [view.handoffRequested], timeout: 3)
         XCTAssertEqual(view.requestedURLs.count, 1)
+        XCTAssertEqual(view.preparationCount, 1)
         XCTAssertEqual(view.requestedURLs.first?.path, "/auth/token-forward/handoff")
     }
 
@@ -290,7 +293,15 @@ final class RTLSdkLoadingTests: XCTestCase {
 
 }
 
-private final class RecordingWebView: RTLWebView {
+private final class RecordingWebView: RTLExperienceView {
+    private let sdk: RTLSdk
+    var isHidden = true
+    private(set) var sentMessages: [RTLNativeMessageType] = []
+    private(set) var invalidationCount = 0
+    private(set) var preparationCount = 0
+
+    init(sdk: RTLSdk) { self.sdk = sdk }
+
     let handoffRequested: XCTestExpectation = {
         let expectation = XCTestExpectation(description: "SDK requests the token handoff")
         expectation.assertForOverFulfill = true
@@ -298,15 +309,20 @@ private final class RecordingWebView: RTLWebView {
     }()
     private(set) var requestedURLs: [URL] = []
 
-    // These tests exercise the SDK's authentication state machine. Document
-    // replacement/clearing would start real WebKit processes even though load
-    // is stubbed below, making cancellation depend on simulator startup time.
-    override func prepareAuthenticationDocument() {}
-    override func invalidateDocument() {}
+    func prepareAuthenticationDocument() { preparationCount += 1 }
+    func invalidateDocument() { invalidationCount += 1 }
+    func sendToWeb(_ type: RTLNativeMessageType, fields: [String: Any]) {
+        sentMessages.append(type)
+    }
+    func sessionCookieHeader(for url: URL) async -> String? { nil }
 
-    override func load(url: URL) {
-        // Observe SDK navigation synchronously. WKWebView.url depends on a
-        // separate WebKit process and must not drive these lifecycle tests.
+    func loadLoginForExample(url: URL) {
+        sdk.beginExampleLogin(in: self)
+        prepareAuthenticationDocument()
+        load(url: url)
+    }
+
+    func load(url: URL) {
         requestedURLs.append(url)
         handoffRequested.fulfill()
     }
@@ -314,8 +330,8 @@ private final class RecordingWebView: RTLWebView {
 
 private final class LoadingDelegate: NSObject, RTLSdkDelegate {
     private let token: String?
-    private var tokenRequestContinuation: CheckedContinuation<Void, Never>?
-    private var loadingStoppedContinuation: CheckedContinuation<Void, Never>?
+    private var tokenRequested = XCTestExpectation(description: "Token provider called")
+    private var loadingStopped = XCTestExpectation(description: "Loading stopped")
     var loadingStates: [Bool] = []
     var readyCount = 0
     var tokenRequestCount = 0
@@ -326,16 +342,14 @@ private final class LoadingDelegate: NSObject, RTLSdkDelegate {
 
     func provideAuthToken() async -> String? {
         tokenRequestCount += 1
-        tokenRequestContinuation?.resume()
-        tokenRequestContinuation = nil
+        tokenRequested.fulfill()
         return token
     }
 
     func onLoadingStateChanged(isLoading: Bool) {
         loadingStates.append(isLoading)
         if !isLoading {
-            loadingStoppedContinuation?.resume()
-            loadingStoppedContinuation = nil
+            loadingStopped.fulfill()
         }
     }
 
@@ -347,16 +361,18 @@ private final class LoadingDelegate: NSObject, RTLSdkDelegate {
         loadingStates = []
         readyCount = 0
         tokenRequestCount = 0
+        tokenRequested = XCTestExpectation(description: "Token provider called")
+        loadingStopped = XCTestExpectation(description: "Loading stopped")
     }
 
     func waitForTokenRequest() async {
-        if tokenRequestCount > 0 { return }
-        await withCheckedContinuation { tokenRequestContinuation = $0 }
+        let result = await XCTWaiter.fulfillment(of: [tokenRequested], timeout: 3)
+        XCTAssertEqual(result, .completed)
     }
 
     func waitForLoadingToStop() async {
-        if loadingStates.last == false { return }
-        await withCheckedContinuation { loadingStoppedContinuation = $0 }
+        let result = await XCTWaiter.fulfillment(of: [loadingStopped], timeout: 3)
+        XCTAssertEqual(result, .completed)
     }
 }
 
