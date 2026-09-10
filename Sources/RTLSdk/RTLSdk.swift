@@ -342,8 +342,6 @@ public final class RTLSdk {
         // Set up permission change handler
         // Only send to webview if it explicitly requested permission status
         locationManager?.onPermissionChange = { [weak self] granted in
-            self?.delegate?.onLocationPermissionChange?(granted: granted)
-
             // Send to webview if it's waiting for a permission response
             if self?.webviewAwaitingPermissionResponse == true {
                 self?.webviewAwaitingPermissionResponse = false
@@ -354,7 +352,6 @@ public final class RTLSdk {
         // Set up geofence enter handler
         geofenceManager?.onGeofenceEnter = { [weak self] store in
             self?.notificationManager?.showNotification(for: store)
-            self?.delegate?.onGeofenceEnter?(store: store)
         }
 
         // Request permissions

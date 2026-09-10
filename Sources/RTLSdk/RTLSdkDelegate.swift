@@ -18,16 +18,6 @@ import Foundation
     /// The host should fetch it from its backend and must not sign it in the app.
     /// - Returns: JWT token string, or nil if unavailable
     func provideAuthToken() async -> String?
-
-    // MARK: - Location Callbacks (Optional)
-
-    /// Called when location permission status changes
-    /// - Parameter granted: true if background location permission is granted
-    @objc optional func onLocationPermissionChange(granted: Bool)
-
-    /// Called when user enters a store geofence
-    /// - Parameter store: The store that was entered
-    @objc optional func onGeofenceEnter(store: RTLStore)
 }
 
 // MARK: - Default Implementations
