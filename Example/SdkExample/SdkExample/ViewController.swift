@@ -176,15 +176,6 @@ extension ViewController: RTLSdkDelegate {
         // TODO: Fetch a fresh JWT from your backend. Never embed credentials in the app.
         return nil
     }
-
-    // Optional location callbacks
-    func onLocationPermissionChange(granted: Bool) {
-        print("Location permission changed: \(granted)")
-    }
-
-    func onGeofenceEnter(store: RTLStore) {
-        print("Entered geofence for store: \(store.name)")
-    }
 }
 
 private extension ViewController {

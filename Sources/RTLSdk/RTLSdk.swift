@@ -342,8 +342,6 @@ public final class RTLSdk {
         // Set up permission change handler
         // Only send to webview if it explicitly requested permission status
         locationManager?.onPermissionChange = { [weak self] granted in
-            self?.delegate?.onLocationPermissionChange?(granted: granted)
-
             // Send to webview if it's waiting for a permission response
             if self?.webviewAwaitingPermissionResponse == true {
                 self?.webviewAwaitingPermissionResponse = false
@@ -354,7 +352,6 @@ public final class RTLSdk {
         // Set up geofence enter handler
         geofenceManager?.onGeofenceEnter = { [weak self] store in
             self?.notificationManager?.showNotification(for: store)
-            self?.delegate?.onGeofenceEnter?(store: store)
         }
 
         // Request permissions
@@ -699,16 +696,11 @@ public final class RTLSdk {
             url: url,
             callbackURLScheme: urlScheme
         ) { [weak self] callbackURL, error in
-            self?.overlaySession = nil
-            if let callbackURL {
-                if self?.handleDeepLink(callbackURL) != true {
-                    RTLLog.error(.core, "Rejected an unexpected overlay callback URL")
-                }
-            } else if let error {
-                // Cancelling is the ordinary way out, not a failure: the user
-                // dismissed the sheet. The web view keeps whatever it had.
-                RTLLog.info(.core, "Overlay closed without a callback: \(error.localizedDescription)")
-            }
+            self?.handleAuthOverlayResult(
+                callbackURL: callbackURL,
+                error: error,
+                surface: requireConfiguredHost ? .auth : .providerAuth
+            )
         }
         session.presentationContextProvider = overlayAnchorProvider
         // Also what removes the "Wants to Use ... to Sign In" system alert.
@@ -724,8 +716,12 @@ public final class RTLSdk {
         overlaySession = session
 
         guard session.start() else {
-            overlaySession = nil
             RTLLog.error(.core, "Could not start the overlay session")
+            handleAuthOverlayResult(
+                callbackURL: nil,
+                error: nil,
+                surface: requireConfiguredHost ? .auth : .providerAuth
+            )
             return
         }
 
@@ -736,6 +732,23 @@ public final class RTLSdk {
             "Opened an isolated auth overlay (ASWebAuthenticationSession, "
                 + "ephemeral) on \(url.host ?? "-")"
         )
+    }
+
+    internal func handleAuthOverlayResult(callbackURL: URL?, error: Error?, surface: RTLSurface) {
+        overlaySession = nil
+        if let callbackURL {
+            if !handleDeepLink(callbackURL) {
+                RTLLog.error(.core, "Rejected an unexpected overlay callback URL")
+            }
+            return
+        }
+
+        if let error {
+            RTLLog.info(.core, "Overlay closed without a callback: \(error.localizedDescription)")
+        }
+        // Keep the current web document, but let it finish any flow waiting
+        // for the auth browser to close (including onboarding card linking).
+        webView?.sendToWeb(.overlayDismissed, fields: ["surface": surface.rawValue])
     }
 
     /// Acts on the return from an overlay.

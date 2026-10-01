@@ -208,6 +208,7 @@ enum RTLNativeMessageType: String {
     case locationUpdate
     case locationResult
     case overlayCompleted
+    case overlayDismissed
 }
 
 func serializeNativeMessage(

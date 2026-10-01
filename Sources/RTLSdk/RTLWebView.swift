@@ -23,8 +23,21 @@ public class RTLWebView: UIView {
     private weak var sdk: RTLSdk?
     private var bridge: RTLBridge
     private let hapticEngine: RTLHapticEngine
-    private let refreshControl = UIRefreshControl()
     private var backgroundObserver: NSObjectProtocol?
+    private var authenticationChallengeHandler: RTLAuthenticationChallengeHandler?
+    private var onAuthenticationChallengeFailure: (() -> Void)?
+
+    @_spi(RTLExample)
+    public func setAuthenticationChallengeHandlerForExample(
+        _ handler: RTLAuthenticationChallengeHandler?,
+        onFailure: (() -> Void)? = nil
+    ) {
+        authenticationChallengeHandler = handler
+        onAuthenticationChallengeFailure = onFailure
+        // Keep the current document alive so it can finish server logout.
+        // Both token-forward and example login prepare a fresh document before
+        // navigation, applying the updated handler's data-store configuration.
+    }
 
     public override var isHidden: Bool {
         didSet {
@@ -49,7 +62,6 @@ public class RTLWebView: UIView {
         self.webView = WKWebView(frame: .zero, configuration: Self.configuration(bridge: bridge))
 
         super.init(frame: .zero)
-        refreshControl.addTarget(self, action: #selector(handlePullToRefresh), for: .valueChanged)
 
         bridge.attach(to: webView, owner: self)
         setupWebView()
@@ -62,9 +74,12 @@ public class RTLWebView: UIView {
         }
     }
 
-    private static func configuration(bridge: RTLBridge) -> WKWebViewConfiguration {
+    private static func configuration(bridge: RTLBridge, ephemeral: Bool = false) -> WKWebViewConfiguration {
         // Configure WKWebView
         let configuration = WKWebViewConfiguration()
+        if ephemeral {
+            configuration.websiteDataStore = .nonPersistent()
+        }
         let contentController = WKUserContentController()
 
         // Add message handler for JavaScript bridge
@@ -142,10 +157,21 @@ public class RTLWebView: UIView {
     // MARK: - Setup
 
     private func setupWebView() {
+        clipsToBounds = true
+        // Let the host's backing color show instead of WebKit's default white
+        // while the document loads. The page controls its own scroll-bounce color.
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.scrollView.bounces = true
+        webView.scrollView.alwaysBounceVertical = true
+        // Each authentication document gets a new WKWebView. Keep its refresh
+        // control local to that scroll view instead of moving one between views.
+        let refreshControl = UIRefreshControl()
+        refreshControl.addTarget(self, action: #selector(handlePullToRefresh), for: .valueChanged)
         refreshControl.accessibilityLabel = "Refresh"
         refreshControl.tintColor = UIColor(white: 0.93, alpha: 1.0)
         webView.scrollView.refreshControl = refreshControl
@@ -172,7 +198,7 @@ public class RTLWebView: UIView {
     @objc private func handlePullToRefresh() {
         guard let currentURL = webView.url,
               currentURL.absoluteString != "about:blank" else {
-            refreshControl.endRefreshing()
+            finishPullToRefresh()
             return
         }
 
@@ -180,11 +206,12 @@ public class RTLWebView: UIView {
     }
 
     private func finishPullToRefresh() {
-        refreshControl.endRefreshing()
+        webView.scrollView.refreshControl?.endRefreshing()
     }
 
     /// Retire the old document and its queued messages without changing the host view.
     func invalidateDocument() {
+        finishPullToRefresh()
         bridge.invalidate()
         webView.stopLoading()
         webView.loadHTMLString("", baseURL: nil)
@@ -199,7 +226,9 @@ public class RTLWebView: UIView {
         webView.uiDelegate = nil
         webView.removeFromSuperview()
         bridge = RTLBridge(sdk: sdk, hapticEngine: hapticEngine)
-        webView = WKWebView(frame: .zero, configuration: Self.configuration(bridge: bridge))
+        webView = WKWebView(frame: .zero, configuration: Self.configuration(
+            bridge: bridge, ephemeral: authenticationChallengeHandler != nil
+        ))
         bridge.attach(to: webView, owner: self)
         setupWebView()
     }
@@ -280,6 +309,26 @@ public class RTLWebView: UIView {
 // MARK: - WKNavigationDelegate
 
 extension RTLWebView: WKNavigationDelegate {
+
+    public func webView(
+        _ webView: WKWebView,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard webView === self.webView else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+        guard let handler = authenticationChallengeHandler else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        let (disposition, credential) = handler.response(to: challenge)
+        completionHandler(disposition, credential)
+        if disposition == .cancelAuthenticationChallenge {
+            onAuthenticationChallengeFailure?()
+        }
+    }
 
     public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url else {

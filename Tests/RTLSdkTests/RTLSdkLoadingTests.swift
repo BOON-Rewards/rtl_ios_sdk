@@ -1,8 +1,48 @@
 import XCTest
+import AuthenticationServices
 @_spi(RTLExample) @testable import RTLSdk
 
 @MainActor
 final class RTLSdkLoadingTests: XCTestCase {
+    func testCancellingAuthOverlayNotifiesWebWithoutReloading() {
+        let delegate = LoadingDelegate()
+        let sdk = RTLSdk.shared
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        sdk.beginExampleLogin(in: view)
+        sdk.handleAppReady()
+
+        sdk.handleAuthOverlayResult(
+            callbackURL: nil,
+            error: NSError(domain: ASWebAuthenticationSessionErrorDomain, code: ASWebAuthenticationSessionError.canceledLogin.rawValue),
+            surface: .auth
+        )
+
+        XCTAssertEqual(view.sentMessages, [.overlayDismissed])
+        XCTAssertEqual(view.lastMessageFields["surface"] as? String, "auth")
+        XCTAssertTrue(view.requestedURLs.isEmpty)
+        XCTAssertFalse(view.isHidden)
+    }
+
+    func testAuthOverlayCallbackCompletesWithoutDismissal() {
+        let delegate = LoadingDelegate()
+        let sdk = RTLSdk.shared
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        sdk.beginExampleLogin(in: view)
+        sdk.handleAppReady()
+
+        sdk.handleAuthOverlayResult(
+            callbackURL: URL(string: "example://rtl-sdk/callback?redirectUrl=https%3A%2F%2Fexample.com%2Fhome&resume=message&completionType=cardLinking"),
+            error: nil,
+            surface: .auth
+        )
+
+        XCTAssertEqual(view.sentMessages, [.overlayCompleted])
+        XCTAssertEqual(view.lastMessageFields["completionType"] as? String, "cardLinking")
+        XCTAssertTrue(view.requestedURLs.isEmpty)
+    }
+
     func testTokenUnavailableEndsLoadingWithoutBecomingReady() async {
         let delegate = LoadingDelegate()
         RTLSdk.shared.initialize(
@@ -297,6 +337,7 @@ private final class RecordingWebView: RTLExperienceView {
     private let sdk: RTLSdk
     var isHidden = true
     private(set) var sentMessages: [RTLNativeMessageType] = []
+    private(set) var lastMessageFields: [String: Any] = [:]
     private(set) var invalidationCount = 0
     private(set) var preparationCount = 0
 
@@ -313,6 +354,7 @@ private final class RecordingWebView: RTLExperienceView {
     func invalidateDocument() { invalidationCount += 1 }
     func sendToWeb(_ type: RTLNativeMessageType, fields: [String: Any]) {
         sentMessages.append(type)
+        lastMessageFields = fields
     }
     func sessionCookieHeader(for url: URL) async -> String? { nil }
 
