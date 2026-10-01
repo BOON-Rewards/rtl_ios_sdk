@@ -116,7 +116,8 @@ final class RTLBridgeTests: XCTestCase {
             .locationPermissionStatus,
             .locationUpdate,
             .locationResult,
-            .overlayCompleted
+            .overlayCompleted,
+            .overlayDismissed
         ]
 
         for type in types {
