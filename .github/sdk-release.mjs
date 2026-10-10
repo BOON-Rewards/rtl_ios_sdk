@@ -6,10 +6,15 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
+// Preserve the CI runner workspace; use /tmp for local Unix runs.
+const tempRoot =
+  process.env.RUNNER_TEMP || (process.platform === "win32" ? os.tmpdir() : "/tmp");
+
 const repositories = {
   ios: "BOON-Rewards/rtl_ios_sdk",
   android: "BOON-Rewards/rtl_android_sdk",
   "react-native": "BOON-Rewards/rtl_rn_sdk",
+  flutter: "BOON-Rewards/rtl_flutter_sdk",
 };
 const read = (file) => fs.readFileSync(file, "utf8");
 const json = (file) => JSON.parse(read(file));
@@ -76,6 +81,15 @@ function metadata() {
   } else if (value.sdk === "android") {
     for (const module of ["core", "hyperlocal-offers"])
       versionMatches(`${module}/build.gradle.kts`, /version = "([^"]+)"/g);
+  } else if (value.sdk === "flutter") {
+    versionMatches("pubspec.yaml", /^version: (.+)$/gm);
+    versionMatches("ios/rtl_sdk/Package.swift", /exact: "([^"]+)"/g);
+    versionMatches("android/build.gradle.kts", /version = "([^"]+)"/g);
+    versionMatches(
+      "android/build.gradle.kts",
+      /com\.affinaloyalty:rtl-sdk-(?:core|location):([^"]+)"/g,
+      2,
+    );
   } else {
     const lock = json("package-lock.json");
     if (
@@ -124,7 +138,7 @@ function iosCheck() {
       "-destination",
       `platform=iOS Simulator,id=${iphone.udid}`,
       "-derivedDataPath",
-      path.join(process.env.RUNNER_TEMP || os.tmpdir(), "sdk-derived-data"),
+      path.join(tempRoot, "sdk-derived-data"),
       "CODE_SIGNING_ALLOWED=NO",
       "test",
     ],
@@ -132,7 +146,7 @@ function iosCheck() {
   );
 }
 
-function gradle(tasks, env = {}) {
+function verifyGradleWrapper(directory = process.cwd()) {
   // Verify the official wrapper before executing it with release credentials.
   // Update these pins together when upgrading Gradle.
   const checksums = {
@@ -147,11 +161,15 @@ function gradle(tasks, env = {}) {
   };
   for (const [file, expected] of Object.entries(checksums)) {
     const actual = createHash("sha256")
-      .update(fs.readFileSync(file))
+      .update(fs.readFileSync(path.join(directory, file)))
       .digest("hex");
     if (actual !== expected)
       throw new Error(`Official Gradle 8.14.3 checksum mismatch: ${file}`);
   }
+}
+
+function gradle(tasks, env = {}) {
+  verifyGradleWrapper();
   run(["./gradlew", ...tasks, "--no-daemon"], { stream: true, env });
 }
 
@@ -163,7 +181,7 @@ function npmInstall() {
 
 function pack() {
   const directory = fs.mkdtempSync(
-    path.join(process.env.RUNNER_TEMP || os.tmpdir(), "sdk-package-"),
+    path.join(tempRoot, "sdk-package-"),
   );
   const result = JSON.parse(
     run([
@@ -185,7 +203,67 @@ function pack() {
   return file;
 }
 
-function check({ sdk }) {
+function nativeSnapshot(sdk, value, directory) {
+  const repo = repositories[sdk];
+  const branch = `sdk-release/${value.version}-${value.sourceCommit.slice(0, 12)}`;
+  const tag = optionalApi(`repos/${repo}/git/ref/tags/${value.version}`);
+  const ref = tag ? value.version : branch;
+  run(
+    [
+      "git",
+      "clone",
+      "--depth",
+      "1",
+      "--branch",
+      ref,
+      `https://github.com/${repo}.git`,
+      directory,
+    ],
+    { stream: true },
+  );
+  const native = JSON.parse(
+    fs.readFileSync(path.join(directory, ".sdk-release.json"), "utf8"),
+  );
+  if (
+    native.sdk !== sdk ||
+    native.version !== value.version ||
+    native.sourceCommit !== value.sourceCommit
+  )
+    throw new Error(
+      `${sdk} dependency does not match the Flutter source snapshot`,
+    );
+}
+
+async function flutterBuild(androidSource, env = {}) {
+  const { buildFlutterHost } = await import("./flutter-release.mjs");
+  await buildFlutterHost(androidSource, env, {
+    run,
+    gradle,
+    verifyGradleWrapper,
+  });
+}
+
+async function flutterCheck(value) {
+  run(["flutter", "pub", "get"], { stream: true });
+  run(["flutter", "analyze", "--no-pub"], { stream: true });
+  run(["flutter", "test", "--no-pub"], { stream: true });
+  const directory = fs.mkdtempSync(
+    path.join(tempRoot, "flutter-native-"),
+  );
+  try {
+    nativeSnapshot("ios", value, path.join(directory, "ios"));
+    nativeSnapshot("android", value, path.join(directory, "android"));
+    await flutterBuild(path.join(directory, "android"), {
+      RTL_IOS_SDK_PATH: path.join(directory, "ios"),
+      RTL_ANDROID_SDK_PATH: path.join(directory, "android"),
+    });
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+async function check(value) {
+  const { sdk } = value;
   if (sdk === "ios") iosCheck();
   else if (sdk === "android")
     gradle([
@@ -193,6 +271,7 @@ function check({ sdk }) {
       ":core:assembleRelease",
       ":hyperlocal-offers:assembleRelease",
     ]);
+  else if (sdk === "flutter") await flutterCheck(value);
   else {
     npmInstall();
     run(["npm", "run", "typecheck"], { stream: true });
@@ -313,6 +392,17 @@ async function publish(value) {
       throw new Error(
         "The existing React Native release is missing its package archive.",
       );
+    if (
+      sdk === "flutter" &&
+      !release.assets.some(
+        (asset) =>
+          asset.name === `rtl-sdk-${version}.tar.gz` &&
+          asset.state === "uploaded",
+      )
+    )
+      throw new Error(
+        "The existing Flutter release is missing its package archive.",
+      );
     console.log(`Already published: ${release.html_url}`);
     return;
   }
@@ -327,6 +417,30 @@ async function publish(value) {
     npmInstall();
     assets.push(pack());
     run(["git", "diff", "--exit-code", "HEAD"]);
+  }
+  if (sdk === "flutter") {
+    await waitForNativeReleases(value);
+    const native = fs.mkdtempSync(
+      path.join(tempRoot, "rtl-wrapper-"),
+    );
+    try {
+      // Fetch the checked native release only for its verified Gradle wrapper.
+      // The generated host still resolves both adapters from published dependencies.
+      nativeSnapshot("android", value, path.join(native, "android"));
+      await flutterBuild(path.join(native, "android"), {
+        RTL_IOS_SDK_PATH: "",
+        RTL_ANDROID_SDK_PATH: "",
+      });
+    } finally {
+      fs.rmSync(native, { recursive: true, force: true });
+    }
+    run(["git", "diff", "--exit-code", "HEAD"]);
+    const directory = fs.mkdtempSync(
+      path.join(tempRoot, "flutter-package-"),
+    );
+    const archive = path.join(directory, `rtl-sdk-${version}.tar.gz`);
+    run(["git", "archive", "--format=tar.gz", "-o", archive, "HEAD"]);
+    assets.push(archive);
   }
   if (!existingTag) {
     const tag = api(`repos/${repo}/git/tags`, {
@@ -379,13 +493,36 @@ try {
       console.log(`${value.sdk} ${value.version} from ${value.sourceCommit}`);
       break;
     case "check":
-      check(value);
+      await check(value);
       break;
+    case "integration-android": {
+      if (value.sdk !== "flutter")
+        throw new Error("Android integration requires the Flutter SDK");
+      const directory = fs.mkdtempSync(
+        path.join(tempRoot, "flutter-native-"),
+      );
+      try {
+        const androidSource = path.join(directory, "android");
+        nativeSnapshot("android", value, androidSource);
+        const { checkAndroidIntegration } = await import(
+          "./flutter-release.mjs"
+        );
+        await checkAndroidIntegration(androidSource, {
+          run,
+          verifyGradleWrapper,
+        });
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+      break;
+    }
     case "publish":
       await publish(value);
       break;
     default:
-      throw new Error("Use metadata, check, or publish.");
+      throw new Error(
+        "Use metadata, check, integration-android (Flutter), or publish.",
+      );
   }
 } catch (error) {
   console.error(error.message);
