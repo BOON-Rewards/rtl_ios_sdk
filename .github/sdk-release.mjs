@@ -6,6 +6,11 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
+// Preserve the CI runner workspace; use /tmp for local Unix runs.
+const tempRoot =
+  process.env.RUNNER_TEMP ||
+  (process.platform === "win32" ? os.tmpdir() : "/tmp");
+
 const repositories = {
   ios: "BOON-Rewards/rtl_ios_sdk",
   android: "BOON-Rewards/rtl_android_sdk",
@@ -124,7 +129,7 @@ function iosCheck() {
       "-destination",
       `platform=iOS Simulator,id=${iphone.udid}`,
       "-derivedDataPath",
-      path.join(process.env.RUNNER_TEMP || os.tmpdir(), "sdk-derived-data"),
+      path.join(tempRoot, "sdk-derived-data"),
       "CODE_SIGNING_ALLOWED=NO",
       "test",
     ],
@@ -132,7 +137,7 @@ function iosCheck() {
   );
 }
 
-function gradle(tasks, env = {}) {
+function verifyGradleWrapper(directory = process.cwd()) {
   // Verify the official wrapper before executing it with release credentials.
   // Update these pins together when upgrading Gradle.
   const checksums = {
@@ -147,11 +152,15 @@ function gradle(tasks, env = {}) {
   };
   for (const [file, expected] of Object.entries(checksums)) {
     const actual = createHash("sha256")
-      .update(fs.readFileSync(file))
+      .update(fs.readFileSync(path.join(directory, file)))
       .digest("hex");
     if (actual !== expected)
       throw new Error(`Official Gradle 8.14.3 checksum mismatch: ${file}`);
   }
+}
+
+function gradle(tasks, env = {}) {
+  verifyGradleWrapper();
   run(["./gradlew", ...tasks, "--no-daemon"], { stream: true, env });
 }
 
@@ -162,9 +171,7 @@ function npmInstall() {
 }
 
 function pack() {
-  const directory = fs.mkdtempSync(
-    path.join(process.env.RUNNER_TEMP || os.tmpdir(), "sdk-package-"),
-  );
+  const directory = fs.mkdtempSync(path.join(tempRoot, "sdk-package-"));
   const result = JSON.parse(
     run([
       "npm",
@@ -185,7 +192,8 @@ function pack() {
   return file;
 }
 
-function check({ sdk }) {
+async function check(value) {
+  const { sdk } = value;
   if (sdk === "ios") iosCheck();
   else if (sdk === "android")
     gradle([
@@ -379,7 +387,7 @@ try {
       console.log(`${value.sdk} ${value.version} from ${value.sourceCommit}`);
       break;
     case "check":
-      check(value);
+      await check(value);
       break;
     case "publish":
       await publish(value);

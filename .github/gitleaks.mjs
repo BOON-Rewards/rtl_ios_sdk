@@ -7,6 +7,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Preserve the CI runner workspace; use /tmp for local Unix runs.
+const tempRoot =
+  process.env.RUNNER_TEMP || (process.platform === "win32" ? os.tmpdir() : "/tmp");
+
 const version = "8.30.1";
 // SHA-256 digests from the official release assets. Verify before extraction.
 const archives = {
@@ -62,7 +66,7 @@ export function scan(directory) {
   if (!expectedHash)
     throw new Error(`Gitleaks release scanning does not support ${platform}.`);
 
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-gitleaks-"));
+  const temporary = fs.mkdtempSync(path.join(tempRoot, "sdk-gitleaks-"));
   try {
     const archive = path.join(temporary, "gitleaks.tar.gz");
     const asset = `gitleaks_${version}_${platform}.tar.gz`;
