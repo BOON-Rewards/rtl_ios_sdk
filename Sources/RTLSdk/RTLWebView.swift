@@ -26,6 +26,8 @@ public class RTLWebView: UIView {
     private var backgroundObserver: NSObjectProtocol?
     private var authenticationChallengeHandler: RTLAuthenticationChallengeHandler?
     private var onAuthenticationChallengeFailure: (() -> Void)?
+    private var activeRefreshControl: UIRefreshControl?
+    private var isRefreshPendingRelease = false
 
     @_spi(RTLExample)
     public func setAuthenticationChallengeHandlerForExample(
@@ -163,6 +165,9 @@ public class RTLWebView: UIView {
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
+        // The host owns WebView placement; avoid shrinking the web viewport
+        // by UIKit's automatic bottom safe-area inset.
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -175,6 +180,9 @@ public class RTLWebView: UIView {
         refreshControl.accessibilityLabel = "Refresh"
         refreshControl.tintColor = UIColor(white: 0.93, alpha: 1.0)
         webView.scrollView.refreshControl = refreshControl
+        webView.scrollView.panGestureRecognizer.addTarget(
+            self, action: #selector(handleRefreshPan(_:))
+        )
 
         // Enable inspection in debug builds
         #if DEBUG
@@ -196,16 +204,60 @@ public class RTLWebView: UIView {
     // MARK: - SDK Methods
 
     @objc private func handlePullToRefresh() {
+        guard activeRefreshControl == nil else { return }
+        if webView.scrollView.isTracking || webView.scrollView.isDragging {
+            isRefreshPendingRelease = true
+            return
+        }
+        isRefreshPendingRelease = false
         guard let currentURL = webView.url,
               currentURL.absoluteString != "about:blank" else {
             finishPullToRefresh()
             return
         }
 
+        let scrollView = webView.scrollView
+        activeRefreshControl = scrollView.refreshControl
+        // Reload from the resting viewport, not the refresh control's expanded
+        // inset: WebKit's fixed-layer hit testing can retain that pull offset.
+        UIView.performWithoutAnimation {
+            scrollView.refreshControl?.endRefreshing()
+            scrollView.refreshControl = nil
+            scrollView.contentInset = .zero
+            scrollView.setContentOffset(.zero, animated: false)
+            scrollView.layoutIfNeeded()
+        }
         webView.reload()
     }
 
+    @objc private func handleRefreshPan(_ gesture: UIPanGestureRecognizer) {
+        switch gesture.state {
+        case .ended:
+            // Allow UIScrollView to finish processing the release before
+            // collapsing the refresh inset and resetting the viewport.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.isRefreshPendingRelease else { return }
+                self.handlePullToRefresh()
+            }
+        case .cancelled, .failed:
+            isRefreshPendingRelease = false
+            webView.scrollView.refreshControl?.endRefreshing()
+        default:
+            break
+        }
+    }
+
     private func finishPullToRefresh() {
+        isRefreshPendingRelease = false
+        if let refreshControl = activeRefreshControl {
+            let scrollView = webView.scrollView
+            scrollView.contentInset = .zero
+            if scrollView.contentOffset.y < 0 {
+                scrollView.setContentOffset(.zero, animated: false)
+            }
+            scrollView.refreshControl = refreshControl
+            activeRefreshControl = nil
+        }
         webView.scrollView.refreshControl?.endRefreshing()
     }
 
