@@ -6,10 +6,16 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
+// Preserve the CI runner workspace; use /tmp for local Unix runs.
+const tempRoot =
+  process.env.RUNNER_TEMP ||
+  (process.platform === "win32" ? os.tmpdir() : "/tmp");
+
 const repositories = {
   ios: "BOON-Rewards/rtl_ios_sdk",
   android: "BOON-Rewards/rtl_android_sdk",
   "react-native": "BOON-Rewards/rtl_rn_sdk",
+  flutter: "BOON-Rewards/rtl_flutter_sdk",
 };
 const read = (file) => fs.readFileSync(file, "utf8");
 const json = (file) => JSON.parse(read(file));
@@ -76,6 +82,15 @@ function metadata() {
   } else if (value.sdk === "android") {
     for (const module of ["core", "hyperlocal-offers"])
       versionMatches(`${module}/build.gradle.kts`, /version = "([^"]+)"/g);
+  } else if (value.sdk === "flutter") {
+    versionMatches("pubspec.yaml", /^version: (.+)$/gm);
+    versionMatches("ios/rtl_sdk/Package.swift", /exact: "([^"]+)"/g);
+    versionMatches("android/build.gradle.kts", /version = "([^"]+)"/g);
+    versionMatches(
+      "android/build.gradle.kts",
+      /com\.affinaloyalty:rtl-sdk-(?:core|location):([^"]+)"/g,
+      2,
+    );
   } else {
     const lock = json("package-lock.json");
     if (
@@ -124,7 +139,7 @@ function iosCheck() {
       "-destination",
       `platform=iOS Simulator,id=${iphone.udid}`,
       "-derivedDataPath",
-      path.join(process.env.RUNNER_TEMP || os.tmpdir(), "sdk-derived-data"),
+      path.join(tempRoot, "sdk-derived-data"),
       "CODE_SIGNING_ALLOWED=NO",
       "test",
     ],
@@ -132,7 +147,7 @@ function iosCheck() {
   );
 }
 
-function gradle(tasks, env = {}) {
+function verifyGradleWrapper(directory = process.cwd()) {
   // Verify the official wrapper before executing it with release credentials.
   // Update these pins together when upgrading Gradle.
   const checksums = {
@@ -147,11 +162,15 @@ function gradle(tasks, env = {}) {
   };
   for (const [file, expected] of Object.entries(checksums)) {
     const actual = createHash("sha256")
-      .update(fs.readFileSync(file))
+      .update(fs.readFileSync(path.join(directory, file)))
       .digest("hex");
     if (actual !== expected)
       throw new Error(`Official Gradle 8.14.3 checksum mismatch: ${file}`);
   }
+}
+
+function gradle(tasks, env = {}) {
+  verifyGradleWrapper();
   run(["./gradlew", ...tasks, "--no-daemon"], { stream: true, env });
 }
 
@@ -162,9 +181,7 @@ function npmInstall() {
 }
 
 function pack() {
-  const directory = fs.mkdtempSync(
-    path.join(process.env.RUNNER_TEMP || os.tmpdir(), "sdk-package-"),
-  );
+  const directory = fs.mkdtempSync(path.join(tempRoot, "sdk-package-"));
   const result = JSON.parse(
     run([
       "npm",
@@ -185,7 +202,8 @@ function pack() {
   return file;
 }
 
-function check({ sdk }) {
+async function check(value) {
+  const { sdk } = value;
   if (sdk === "ios") iosCheck();
   else if (sdk === "android")
     gradle([
@@ -193,7 +211,11 @@ function check({ sdk }) {
       ":core:assembleRelease",
       ":hyperlocal-offers:assembleRelease",
     ]);
-  else {
+  else if (sdk === "flutter") {
+    run(["flutter", "pub", "get"], { stream: true });
+    run(["flutter", "analyze", "--no-pub"], { stream: true });
+    run(["flutter", "test", "--no-pub"], { stream: true });
+  } else {
     npmInstall();
     run(["npm", "run", "typecheck"], { stream: true });
     run(
@@ -303,15 +325,18 @@ async function publish(value) {
         "Resolve the existing incomplete release manually before retrying.",
       );
     if (
-      sdk === "react-native" &&
+      ["react-native", "flutter"].includes(sdk) &&
       !release.assets.some(
         (asset) =>
-          asset.name === `react-native-rtl-sdk-${version}.tgz` &&
+          asset.name ===
+            (sdk === "flutter"
+              ? `rtl-sdk-${version}.tar.gz`
+              : `react-native-rtl-sdk-${version}.tgz`) &&
           asset.state === "uploaded",
       )
     )
       throw new Error(
-        "The existing React Native release is missing its package archive.",
+        `The existing ${sdk === "flutter" ? "Flutter" : "React Native"} release is missing its package archive.`,
       );
     console.log(`Already published: ${release.html_url}`);
     return;
@@ -321,50 +346,64 @@ async function publish(value) {
       "Android has a tag without a completed release. Maven uploads may be partial. Inspect both packages; finish the original publication and create its release after verification, or use a new version. No artifacts were overwritten.",
     );
 
-  const assets = [];
-  if (sdk === "react-native") {
-    await waitForNativeReleases(value);
-    npmInstall();
-    assets.push(pack());
-    run(["git", "diff", "--exit-code", "HEAD"]);
+  const directory =
+    sdk === "flutter"
+      ? fs.mkdtempSync(path.join(tempRoot, "sdk-package-"))
+      : null;
+  try {
+    const assets = [];
+    if (sdk === "flutter") {
+      await waitForNativeReleases(value);
+      const archive = path.join(directory, `rtl-sdk-${version}.tar.gz`);
+      run(["git", "archive", "--format=tar.gz", "-o", archive, "HEAD"]);
+      assets.push(archive);
+    }
+    if (sdk === "react-native") {
+      await waitForNativeReleases(value);
+      npmInstall();
+      assets.push(pack());
+      run(["git", "diff", "--exit-code", "HEAD"]);
+    }
+    if (!existingTag) {
+      const tag = api(`repos/${repo}/git/tags`, {
+        tag: version,
+        message: `SDK ${version}`,
+        object: sha,
+        type: "commit",
+      });
+      api(`repos/${repo}/git/refs`, {
+        ref: `refs/tags/${version}`,
+        sha: tag.sha,
+      });
+    }
+    // Tagging and publication deliberately stay in the same workflow: tags made
+    // with GITHUB_TOKEN do not start another tag-triggered Actions workflow.
+    if (sdk === "android")
+      gradle(
+        [
+          ":core:publishReleasePublicationToGitHubPackagesRepository",
+          ":hyperlocal-offers:publishReleasePublicationToGitHubPackagesRepository",
+        ],
+        {
+          GITHUB_USERNAME: process.env.GITHUB_ACTOR,
+          GITHUB_TOKEN: process.env.GH_TOKEN,
+        },
+      );
+    run([
+      "gh",
+      "release",
+      "create",
+      version,
+      "--repo",
+      repo,
+      "--verify-tag",
+      "--generate-notes",
+      ...assets,
+    ]);
+    console.log(`Published https://github.com/${repo}/releases/tag/${version}`);
+  } finally {
+    if (directory) fs.rmSync(directory, { recursive: true, force: true });
   }
-  if (!existingTag) {
-    const tag = api(`repos/${repo}/git/tags`, {
-      tag: version,
-      message: `SDK ${version}`,
-      object: sha,
-      type: "commit",
-    });
-    api(`repos/${repo}/git/refs`, {
-      ref: `refs/tags/${version}`,
-      sha: tag.sha,
-    });
-  }
-  // Tagging and publication deliberately stay in the same workflow: tags made
-  // with GITHUB_TOKEN do not start another tag-triggered Actions workflow.
-  if (sdk === "android")
-    gradle(
-      [
-        ":core:publishReleasePublicationToGitHubPackagesRepository",
-        ":hyperlocal-offers:publishReleasePublicationToGitHubPackagesRepository",
-      ],
-      {
-        GITHUB_USERNAME: process.env.GITHUB_ACTOR,
-        GITHUB_TOKEN: process.env.GH_TOKEN,
-      },
-    );
-  run([
-    "gh",
-    "release",
-    "create",
-    version,
-    "--repo",
-    repo,
-    "--verify-tag",
-    "--generate-notes",
-    ...assets,
-  ]);
-  console.log(`Published https://github.com/${repo}/releases/tag/${version}`);
 }
 
 try {
@@ -379,7 +418,7 @@ try {
       console.log(`${value.sdk} ${value.version} from ${value.sourceCommit}`);
       break;
     case "check":
-      check(value);
+      await check(value);
       break;
     case "publish":
       await publish(value);
