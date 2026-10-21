@@ -298,7 +298,7 @@ public class RTLWebView: UIView {
     public func loadLoginForExample(url: URL) {
         sdk?.beginExampleLogin(in: self)
         prepareAuthenticationDocument()
-        load(url: url)
+        load(url: sdk?.exampleLoginURL(url) ?? url)
     }
 
     /// Returns the signed-in WebView session in HTTP header form for an SDK
