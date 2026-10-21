@@ -589,6 +589,19 @@ public final class RTLSdk {
         webviewIsReady = false
     }
 
+    internal func exampleLoginURL(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var items = (components.queryItems ?? []).filter {
+            $0.name != "isWrappedMobileApp" && $0.name != "appScheme"
+        }
+        items.append(URLQueryItem(name: "isWrappedMobileApp", value: "true"))
+        if let urlScheme {
+            items.append(URLQueryItem(name: "appScheme", value: urlScheme))
+        }
+        components.queryItems = items
+        return components.url ?? url
+    }
+
     internal func beginExampleLogin(in view: any RTLExperienceView) {
         guard isCurrentWebView(view) else { return }
         let attempt = AuthenticationAttempt()
