@@ -29,7 +29,7 @@ final class RTLHapticEngine {
 
         do {
             let engine = try preparedEngine()
-            let events = pattern.events.compactMap(makeEvent)
+            let events = pattern.events.compactMap(Self.makeEvent)
             guard !events.isEmpty else { return }
             let hapticPattern = try CHHapticPattern(events: events, parameters: [])
             let player = try engine.makePlayer(with: hapticPattern)
@@ -71,7 +71,7 @@ final class RTLHapticEngine {
         return newEngine
     }
 
-    private func makeEvent(_ event: RTLHapticPattern.Event) -> CHHapticEvent? {
+    static func makeEvent(_ event: RTLHapticPattern.Event) -> CHHapticEvent? {
         let parameters = [
             CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(event.intensity)),
             CHHapticEventParameter(parameterID: .hapticSharpness, value: Float(event.sharpness))
