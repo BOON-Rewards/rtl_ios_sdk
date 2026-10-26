@@ -1,3 +1,4 @@
+import CoreHaptics
 import XCTest
 @testable import RTLSdk
 
@@ -43,6 +44,23 @@ final class RTLBridgeTests: XCTestCase {
             return XCTFail("Expected hapticPlay")
         }
         XCTAssertEqual(pattern.events.first?.kind, .impact)
+    }
+
+    func testCrispImpactPreservesNativeEventAndParameters() throws {
+        let message = try RTLWebMessage.parse([
+            "type": "hapticPlay",
+            "payload": ["version": 1, "events": [
+                ["at": 0, "type": "impact", "intensity": 1.0, "sharpness": 1.0]
+            ]]
+        ])
+        guard case .hapticPlay(let pattern) = message else {
+            return XCTFail("Expected hapticPlay")
+        }
+        let event = try XCTUnwrap(pattern.events.first.flatMap(RTLHapticEngine.makeEvent))
+        XCTAssertEqual(event.type, .hapticTransient)
+        XCTAssertEqual(event.relativeTime, 0)
+        XCTAssertEqual(event.eventParameters.first { $0.parameterID == .hapticIntensity }?.value, 1)
+        XCTAssertEqual(event.eventParameters.first { $0.parameterID == .hapticSharpness }?.value, 1)
     }
 
     func testIgnoresUnknownMessages() throws {
