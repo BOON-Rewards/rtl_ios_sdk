@@ -4,7 +4,7 @@ import XCTest
 final class RTLDeepLinkTests: XCTestCase {
     func testOpenRouteGivesRedirectPrecedence() throws {
         let url = try XCTUnwrap(URL(
-            string: "example://rtl-sdk/open?rtlEventId=event-1&rtlRedirectUrl=https%3A%2F%2Fexample.com%2Foffers"
+            string: "example://rtl-callback/open?rtlEventId=event-1&rtlRedirectUrl=https%3A%2F%2Fexample.com%2Foffers"
         ))
 
         XCTAssertEqual(
@@ -14,12 +14,12 @@ final class RTLDeepLinkTests: XCTestCase {
     }
 
     func testDefaultEventAndCallbackRoutes() throws {
-        let defaultURL = try XCTUnwrap(URL(string: "example://rtl-sdk/open"))
-        let eventURL = try XCTUnwrap(URL(string: "example://rtl-sdk/open?rtlEventId=event-1"))
+        let defaultURL = try XCTUnwrap(URL(string: "example://rtl-callback/open"))
+        let eventURL = try XCTUnwrap(URL(string: "example://rtl-callback/open?rtlEventId=event-1"))
         let blankRedirectURL = try XCTUnwrap(URL(
-            string: "example://rtl-sdk/open?rtlEventId=event-1&rtlRedirectUrl=%20"
+            string: "example://rtl-callback/open?rtlEventId=event-1&rtlRedirectUrl=%20"
         ))
-        let callbackURL = try XCTUnwrap(URL(string: "example://rtl-sdk/callback?redirectUrl=x"))
+        let callbackURL = try XCTUnwrap(URL(string: "example://rtl-callback/callback?redirectUrl=x"))
 
         XCTAssertEqual(
             parseRTLDeepLink(defaultURL, configuredScheme: "example"),
@@ -39,12 +39,35 @@ final class RTLDeepLinkTests: XCTestCase {
         )
     }
 
-    func testRejectsLegacyAndUnrelatedRoutes() throws {
-        let values = [
-            "example://rtlSdk",
+    func testPathlessCallbackAliasPreservesTheWholeURL() throws {
+        for value in [
             "example://rtl-callback",
-            "example://rtl-sdk/unknown",
-            "other://rtl-sdk/open"
+            "EXAMPLE://RTL-CALLBACK?redirectUrl=https%3A%2F%2Fexample.com&result=linked",
+            "example://rtl-callback/callback?resume=message&completionType=openBanking&result=linked"
+        ] {
+            let url = try XCTUnwrap(URL(string: value))
+            XCTAssertEqual(parseRTLDeepLink(url, configuredScheme: "example"), .callback(url))
+            XCTAssertNil(parseRTLDeepLink(url, configuredScheme: nil))
+        }
+    }
+
+    func testOpenRouteDecodesFormEncodedSpacesAndLiteralPluses() throws {
+        let url = try XCTUnwrap(URL(string: "example://rtl-callback/open?rtlEventId=event%2B1&rtlRedirectUrl=+"))
+        XCTAssertEqual(
+            parseRTLDeepLink(url, configuredScheme: "example"),
+            .open(rtlEventId: "event+1", rtlRedirectUrl: nil)
+        )
+    }
+
+    func testRejectsUnrelatedRoutes() throws {
+        let values = [
+            "example://rtl-callback/unknown",
+            "other://rtl-callback/open",
+            "example://rtl-callback/",
+            "example://rtl-callback/open/extra",
+            "example://rtl-callback.evil.example/open",
+            "example://user@rtl-callback/open",
+            "example://rtl-callback:123/open"
         ]
 
         for value in values {

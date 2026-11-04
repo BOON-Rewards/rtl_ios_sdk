@@ -33,7 +33,7 @@ final class RTLSdkLoadingTests: XCTestCase {
         sdk.handleAppReady()
 
         sdk.handleAuthOverlayResult(
-            callbackURL: URL(string: "example://rtl-sdk/callback?redirectUrl=https%3A%2F%2Fexample.com%2Fhome&resume=message&completionType=cardLinking"),
+            callbackURL: URL(string: "example://rtl-callback/callback?redirectUrl=https%3A%2F%2Fexample.com%2Fhome&resume=message&completionType=cardLinking"),
             error: nil,
             surface: .auth
         )
@@ -41,6 +41,78 @@ final class RTLSdkLoadingTests: XCTestCase {
         XCTAssertEqual(view.sentMessages, [.overlayCompleted])
         XCTAssertEqual(view.lastMessageFields["completionType"] as? String, "cardLinking")
         XCTAssertTrue(view.requestedURLs.isEmpty)
+    }
+
+    func testBothCallbackFormatsPreserveProviderResultsInTheMessage() throws {
+        for path in ["", "/callback"] {
+            let delegate = LoadingDelegate()
+            let sdk = RTLSdk.shared
+            sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+            let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+            sdk.beginExampleLogin(in: view)
+            sdk.handleAppReady()
+            let url = try XCTUnwrap(URL(string: "example://rtl-callback\(path)?redirectUrl=https%3A%2F%2Fexample.com%2Fhome%3Fresult%3Dold%26keep%3Dyes&resume=message&completionType=openBanking&result=linked&providerToken=opaque%2Bvalue"))
+
+            sdk.handleAuthOverlayResult(callbackURL: url, error: nil, surface: .providerAuth)
+
+            XCTAssertEqual(view.sentMessages, [.overlayCompleted])
+            XCTAssertEqual(view.lastMessageFields["completionType"] as? String, "openBanking")
+            XCTAssertEqual(view.lastMessageFields["data"] as? [String: String], [
+                "result": "linked", "keep": "yes", "providerToken": "opaque+value"
+            ])
+            XCTAssertTrue(view.requestedURLs.isEmpty)
+        }
+    }
+
+    func testCallbackReloadFallbackPreservesResultsAndExcludesControlParameters() throws {
+        for (path, ready, resume) in [("", true, ""), ("/callback", false, "&resume=message&completionType=cardLinking")] {
+            let delegate = LoadingDelegate()
+            let sdk = RTLSdk.shared
+            sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+            let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+            if ready {
+                sdk.beginExampleLogin(in: view)
+                sdk.handleAppReady()
+            }
+            let url = try XCTUnwrap(URL(string: "example://rtl-callback\(path)?redirectUrl=https%3A%2F%2Fexample.com%2Fhome%3Fresult%3Dold%26keep%3Dyes&result=linked&providerToken=opaque%2Bvalue\(resume)"))
+
+            XCTAssertTrue(sdk.handleDeepLink(url))
+
+            XCTAssertTrue(view.sentMessages.isEmpty)
+            XCTAssertEqual(view.requestedURLs.count, 1)
+            let destination = try XCTUnwrap(view.requestedURLs.first)
+            XCTAssertEqual(destination.path, "/home")
+            XCTAssertTrue(destination.absoluteString.contains("providerToken=opaque%2Bvalue"))
+            let items = URLComponents(url: destination, resolvingAgainstBaseURL: false)?.queryItems
+            XCTAssertEqual(Set(items ?? []), Set([
+                URLQueryItem(name: "result", value: "linked"), URLQueryItem(name: "keep", value: "yes"),
+                URLQueryItem(name: "providerToken", value: "opaque+value")
+            ]))
+        }
+    }
+
+    func testCallbacksRejectInvalidOriginsAndCompletionControls() throws {
+        let delegate = LoadingDelegate()
+        let sdk = RTLSdk.shared
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        let view = sdk.createWebView(using: { RecordingWebView(sdk: $0) })
+        sdk.beginExampleLogin(in: view)
+        sdk.handleAppReady()
+        for query in [
+            "redirectUrl=https%3A%2F%2Fevil.example%2Fhome",
+            "redirectUrl=http%3A%2F%2Fexample.com%2Fhome",
+            "redirectUrl=https%3A%2F%2Fexample.com%3A444%2Fhome",
+            "redirectUrl=javascript%3Aalert(1)",
+            "redirectUrl=https%3A%2F%2Fexample.com&resume=unknown",
+            "redirectUrl=https%3A%2F%2Fexample.com&resume=message&completionType=%20",
+            "redirectUrl=https%3A%2F%2Fexample.com&resume=message&completionType=+",
+            "result=linked"
+        ] {
+            let url = try XCTUnwrap(URL(string: "example://rtl-callback/callback?\(query)"))
+            XCTAssertTrue(sdk.handleDeepLink(url))
+            XCTAssertTrue(view.sentMessages.isEmpty)
+            XCTAssertTrue(view.requestedURLs.isEmpty)
+        }
     }
 
     func testTokenUnavailableEndsLoadingWithoutBecomingReady() async {
