@@ -62,13 +62,14 @@ enum RTLDeepLinkRoute: Equatable {
 func parseRTLDeepLink(_ url: URL, configuredScheme: String?) -> RTLDeepLinkRoute? {
     guard let configuredScheme,
           url.scheme?.caseInsensitiveCompare(configuredScheme) == .orderedSame,
-          url.host?.caseInsensitiveCompare("rtl-sdk") == .orderedSame else {
+          url.host?.caseInsensitiveCompare("rtl-callback") == .orderedSame,
+          url.user == nil, url.password == nil, url.port == nil else {
         return nil
     }
 
     switch url.path {
     case "/open":
-        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.formQueryItems
         let rtlRedirectUrl = items?
             .first(where: { $0.name == "rtlRedirectUrl" })?
             .value?
@@ -77,7 +78,7 @@ func parseRTLDeepLink(_ url: URL, configuredScheme: String?) -> RTLDeepLinkRoute
             ? items?.first(where: { $0.name == "rtlEventId" })?.value?.nilIfBlank
             : nil
         return .open(rtlEventId: rtlEventId, rtlRedirectUrl: rtlRedirectUrl)
-    case "/callback":
+    case "", "/callback":
         return .callback(url)
     default:
         return nil
@@ -87,6 +88,15 @@ func parseRTLDeepLink(_ url: URL, configuredScheme: String?) -> RTLDeepLinkRoute
 private extension String {
     var nilIfBlank: String? {
         trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self
+    }
+}
+
+private extension URLComponents {
+    var formQueryItems: [URLQueryItem]? {
+        var components = self
+        // Match URLSearchParams and Android: raw '+' is a space, '%2B' is a plus.
+        components.percentEncodedQuery = percentEncodedQuery?.replacingOccurrences(of: "+", with: "%20")
+        return components.queryItems
     }
 }
 
@@ -269,9 +279,10 @@ public final class RTLSdk {
 
     /// Route an RTL deep link received by the host app.
     ///
-    /// `<scheme>://rtl-sdk/open` presents the experience. The optional
+    /// `<scheme>://rtl-callback/open` presents the experience. The optional
     /// `rtlRedirectUrl` takes precedence over `rtlEventId` after authentication.
-    /// `<scheme>://rtl-sdk/callback` returns from an SDK-owned browser overlay.
+    /// `<scheme>://rtl-callback/callback` returns from an SDK-owned browser overlay.
+    /// A pathless `rtl-callback` URL is retained as a browser callback alias.
     ///
     /// Returns true when the URL belongs to the SDK. Presentation completes
     /// asynchronously through the normal loading and readiness callbacks.
@@ -766,7 +777,7 @@ public final class RTLSdk {
 
     /// Acts on the return from an overlay.
     ///
-    /// The flow ends by redirecting to `<urlScheme>://rtl-sdk/callback?redirectUrl=…`,
+    /// The flow ends by redirecting to `<urlScheme>://rtl-callback/callback?redirectUrl=…`,
     /// which the system matches to this session and hands back here. Without
     /// this the sheet closed and nothing else happened: the web view still held
     /// the page from before the flow, so a freshly linked card never appeared.
@@ -776,7 +787,7 @@ public final class RTLSdk {
     /// receive the modal state they need to restore their UI.
     private func handleOverlayCallback(_ url: URL) {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        let items = components?.queryItems ?? []
+        let items = components?.formQueryItems ?? []
 
         guard
             let target = items.first(where: { $0.name == "redirectUrl" })?.value,
@@ -794,8 +805,10 @@ public final class RTLSdk {
         }
         if !carried.isEmpty {
             let carriedNames = Set(carried.map(\.name))
-            destination.queryItems = (destination.queryItems ?? [])
+            destination.queryItems = (destination.formQueryItems ?? [])
                 .filter { !carriedNames.contains($0.name) } + carried
+            destination.percentEncodedQuery = destination.percentEncodedQuery?
+                .replacingOccurrences(of: "+", with: "%2B")
         }
 
         // The same host rule as opening the overlay. This URL arrives from
@@ -824,7 +837,7 @@ public final class RTLSdk {
         // Cold starts use the URL fallback until the page listener is ready.
         if webviewIsReady, resumeMode == "message", let completionType {
             var data: [String: String] = [:]
-            for item in destination.queryItems ?? [] where data[item.name] == nil {
+            for item in destination.formQueryItems ?? [] where data[item.name] == nil {
                 data[item.name] = item.value ?? ""
             }
             webView?.sendToWeb(.overlayCompleted, fields: [
@@ -958,7 +971,7 @@ public final class RTLSdk {
 
         components.path = "/auth/token-forward/handoff"
         components.query = nil
-        components.percentEncodedFragment = fragment
+        components.percentEncodedFragment = fragment.replacingOccurrences(of: "+", with: "%2B")
         return components.url
     }
 
