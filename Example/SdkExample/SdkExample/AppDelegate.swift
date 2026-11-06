@@ -17,7 +17,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 
         if let deepLinkURL = launchOptions?[.url] as? URL {
             viewController.loadViewIfNeeded()
-            _ = RTLSdk.shared.handleDeepLink(deepLinkURL)
+            _ = viewController.handleDeepLink(deepLinkURL)
         }
 
         if let remoteNotification = launchOptions?[.remoteNotification] as? [AnyHashable: Any],
@@ -43,7 +43,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         }
 
         viewController.loadViewIfNeeded()
-        return RTLSdk.shared.handleDeepLink(url)
+        return viewController.handleDeepLink(url)
     }
 
     func userNotificationCenter(

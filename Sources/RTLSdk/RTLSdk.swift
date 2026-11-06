@@ -111,6 +111,9 @@ public final class RTLSdk {
     private var baseURL: URL?
     private var urlScheme: String?
     private var externalChapterId: String?
+
+    /// JSON-compatible host context, exposed through the native capabilities bridge.
+    public private(set) var hostContext: [String: Any] = [:]
     private var isInitialized = false
 
     // MARK: - State
@@ -180,10 +183,23 @@ public final class RTLSdk {
         self.urlScheme = urlScheme
         self.delegate = delegate
         self.externalChapterId = externalChapterId
+        self.hostContext = [:]
         self.isInitialized = true
     }
 
     // MARK: - Public API
+
+    /// Replace host context after initialization and before creating the view.
+    public func setHostContext(_ context: [String: Any]) throws {
+        guard JSONSerialization.isValidJSONObject(context) else {
+            throw RTLWebMessageError.invalid("Host context must contain JSON-compatible values")
+        }
+        let data = try JSONSerialization.data(withJSONObject: context)
+        guard let snapshot = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw RTLWebMessageError.invalid("Host context must be a JSON object")
+        }
+        hostContext = snapshot
+    }
 
     /// Creates an embeddable webview for the RTL experience
     /// - Returns: RTLWebView instance that can be added to your view hierarchy

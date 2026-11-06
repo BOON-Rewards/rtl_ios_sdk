@@ -115,6 +115,26 @@ final class RTLSdkLoadingTests: XCTestCase {
         }
     }
 
+    func testHostContextCopiesReplacesAndResetsForTheNextHost() throws {
+        let sdk = RTLSdk.shared
+        let delegate = LoadingDelegate()
+        sdk.initialize(baseURL: URL(string: "https://example.com")!, urlScheme: "example", delegate: delegate)
+        XCTAssertTrue(sdk.hostContext.isEmpty)
+        let nested = NSMutableDictionary(dictionary: ["label": "before"])
+        try sdk.setHostContext(["handlesBottomInset": true, "nested": nested, "nullable": NSNull()])
+        nested["label"] = "after"
+        XCTAssertEqual((sdk.hostContext["nested"] as? [String: Any])?["label"] as? String, "before")
+        XCTAssertTrue(sdk.hostContext["nullable"] is NSNull)
+        for invalid in [Double.nan, Double.infinity, NSObject()] as [Any] {
+            XCTAssertThrowsError(try sdk.setHostContext(["invalid": invalid]))
+            XCTAssertEqual(sdk.hostContext["handlesBottomInset"] as? Bool, true)
+        }
+        try sdk.setHostContext(["other": [1, false, "value"] as [Any]])
+        XCTAssertNil(sdk.hostContext["handlesBottomInset"])
+        sdk.initialize(baseURL: URL(string: "https://other.example.com")!, urlScheme: "other", delegate: delegate)
+        XCTAssertTrue(sdk.hostContext.isEmpty)
+    }
+
     func testTokenUnavailableEndsLoadingWithoutBecomingReady() async {
         let delegate = LoadingDelegate()
         RTLSdk.shared.initialize(
