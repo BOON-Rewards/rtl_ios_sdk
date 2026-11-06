@@ -122,7 +122,8 @@ final class RTLBridge: NSObject, WKScriptMessageHandler {
         sendToWeb(.nativeCapabilities, fields: [
             "capabilities": [
                 "haptics": hapticEngine.capabilities,
-                "unifiedDeepLinks": true
+                "unifiedDeepLinks": true,
+                "hostContext": sdk?.hostContext ?? [:]
             ]
         ])
     }

@@ -2,6 +2,8 @@ import UIKit
 import RTLSdk
 
 class ViewController: UIViewController {
+    private var experienceReady = false
+    private var pendingDeepLinks: [URL] = []
 
     private let statusLabel = UILabel()
     private let loginButton = UIButton(type: .system)
@@ -115,6 +117,18 @@ class ViewController: UIViewController {
         presentRTLExperience(statusMessage: "Logging in...")
     }
 
+    @discardableResult
+    func handleDeepLink(_ url: URL) -> Bool {
+        guard experienceReady else {
+            pendingDeepLinks.append(url)
+            statusLabel.text = "Tap Login to open the link."
+            return true
+        }
+        let handled = RTLSdk.shared.handleDeepLink(url)
+        if handled && url.path == "/open" { experienceReady = false }
+        return handled
+    }
+
     func presentRTLExperience(
         rtlEventId: String? = nil,
         rtlRedirectUrl: String? = nil,
@@ -139,6 +153,8 @@ class ViewController: UIViewController {
     }
 
     @objc private func logoutTapped() {
+        experienceReady = false
+        pendingDeepLinks.removeAll()
         RTLSdk.shared.logout()
         RTLSdk.shared.disableLocationFeatures()
         rtlWebView?.isHidden = true
@@ -156,9 +172,14 @@ class ViewController: UIViewController {
 extension ViewController: RTLSdkDelegate {
     func onReady() {
         print("RTL app is ready")
+        experienceReady = true
         statusLabel.isHidden = true
         loginButton.isHidden = true
         navigationItem.rightBarButtonItem = logoutButton
+
+        let links = pendingDeepLinks
+        pendingDeepLinks.removeAll()
+        for url in links { handleDeepLink(url) }
 
         RTLSdk.shared.enableLocationFeatures()
 
